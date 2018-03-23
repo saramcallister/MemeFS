@@ -5,7 +5,7 @@
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
 
-  gcc -Wall `pkg-config fuse --cflags --libs` fusexmp.c -o fusexmp
+  gcc -Wall `pkg-config fuse --cflags --libs` fusememe.c -o fusememe
 */
 
 #define FUSE_USE_VERSION 26
@@ -31,7 +31,7 @@
 #include <sys/xattr.h>
 #endif
 
-static int xmp_getattr(const char *path, struct stat *stbuf)
+static int meme_getattr(const char *path, struct stat *stbuf)
 {
 	int res;
 
@@ -42,7 +42,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
 	return 0;
 }
 
-static int xmp_access(const char *path, int mask)
+static int meme_access(const char *path, int mask)
 {
 	int res;
 
@@ -53,7 +53,7 @@ static int xmp_access(const char *path, int mask)
 	return 0;
 }
 
-static int xmp_readlink(const char *path, char *buf, size_t size)
+static int meme_readlink(const char *path, char *buf, size_t size)
 {
 	int res;
 
@@ -66,7 +66,7 @@ static int xmp_readlink(const char *path, char *buf, size_t size)
 }
 
 
-static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+static int meme_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		       off_t offset, struct fuse_file_info *fi)
 {
 	DIR *dp;
@@ -92,7 +92,7 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	return 0;
 }
 
-static int xmp_mknod(const char *path, mode_t mode, dev_t rdev)
+static int meme_mknod(const char *path, mode_t mode, dev_t rdev)
 {
 	int res;
 
@@ -112,7 +112,7 @@ static int xmp_mknod(const char *path, mode_t mode, dev_t rdev)
 	return 0;
 }
 
-static int xmp_mkdir(const char *path, mode_t mode)
+static int meme_mkdir(const char *path, mode_t mode)
 {
 	int res;
 
@@ -123,7 +123,7 @@ static int xmp_mkdir(const char *path, mode_t mode)
 	return 0;
 }
 
-static int xmp_unlink(const char *path)
+static int meme_unlink(const char *path)
 {
 	int res;
 
@@ -134,7 +134,7 @@ static int xmp_unlink(const char *path)
 	return 0;
 }
 
-static int xmp_rmdir(const char *path)
+static int meme_rmdir(const char *path)
 {
 	int res;
 
@@ -145,7 +145,7 @@ static int xmp_rmdir(const char *path)
 	return 0;
 }
 
-static int xmp_symlink(const char *to, const char *from)
+static int meme_symlink(const char *to, const char *from)
 {
 	int res;
 
@@ -156,7 +156,7 @@ static int xmp_symlink(const char *to, const char *from)
 	return 0;
 }
 
-static int xmp_rename(const char *from, const char *to)
+static int meme_rename(const char *from, const char *to)
 {
 	int res;
 
@@ -167,7 +167,7 @@ static int xmp_rename(const char *from, const char *to)
 	return 0;
 }
 
-static int xmp_link(const char *from, const char *to)
+static int meme_link(const char *from, const char *to)
 {
 	int res;
 
@@ -178,7 +178,7 @@ static int xmp_link(const char *from, const char *to)
 	return 0;
 }
 
-static int xmp_chmod(const char *path, mode_t mode)
+static int meme_chmod(const char *path, mode_t mode)
 {
 	int res;
 
@@ -189,7 +189,7 @@ static int xmp_chmod(const char *path, mode_t mode)
 	return 0;
 }
 
-static int xmp_chown(const char *path, uid_t uid, gid_t gid)
+static int meme_chown(const char *path, uid_t uid, gid_t gid)
 {
 	int res;
 
@@ -200,7 +200,7 @@ static int xmp_chown(const char *path, uid_t uid, gid_t gid)
 	return 0;
 }
 
-static int xmp_truncate(const char *path, off_t size)
+static int meme_truncate(const char *path, off_t size)
 {
 	int res;
 
@@ -211,7 +211,7 @@ static int xmp_truncate(const char *path, off_t size)
 	return 0;
 }
 
-static int xmp_utimens(const char *path, const struct timespec ts[2])
+static int meme_utimens(const char *path, const struct timespec ts[2])
 {
 	int res;
 	struct timeval tv[2];
@@ -228,7 +228,7 @@ static int xmp_utimens(const char *path, const struct timespec ts[2])
 	return 0;
 }
 
-static int xmp_open(const char *path, struct fuse_file_info *fi)
+static int meme_open(const char *path, struct fuse_file_info *fi)
 {
 	int res;
 
@@ -240,7 +240,7 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
 	return 0;
 }
 
-static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
+static int meme_read(const char *path, char *buf, size_t size, off_t offset,
 		    struct fuse_file_info *fi)
 {
 	int fd;
@@ -259,7 +259,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 	return res;
 }
 
-static int xmp_write(const char *path, const char *buf, size_t size,
+static int meme_write(const char *path, const char *buf, size_t size,
 		     off_t offset, struct fuse_file_info *fi)
 {
 	int fd;
@@ -278,7 +278,7 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 	return res;
 }
 
-static int xmp_statfs(const char *path, struct statvfs *stbuf)
+static int meme_statfs(const char *path, struct statvfs *stbuf)
 {
 	int res;
 
@@ -289,7 +289,7 @@ static int xmp_statfs(const char *path, struct statvfs *stbuf)
 	return 0;
 }
 
-static int xmp_release(const char *path, struct fuse_file_info *fi)
+static int meme_release(const char *path, struct fuse_file_info *fi)
 {
 	/* Just a stub.	 This method is optional and can safely be left
 	   unimplemented */
@@ -299,7 +299,7 @@ static int xmp_release(const char *path, struct fuse_file_info *fi)
 	return 0;
 }
 
-static int xmp_fsync(const char *path, int isdatasync,
+static int meme_fsync(const char *path, int isdatasync,
 		     struct fuse_file_info *fi)
 {
 	/* Just a stub.	 This method is optional and can safely be left
@@ -313,7 +313,7 @@ static int xmp_fsync(const char *path, int isdatasync,
 
 #ifdef HAVE_SETXATTR
 /* xattr operations are optional and can safely be left unimplemented */
-static int xmp_setxattr(const char *path, const char *name, const char *value,
+static int meme_setxattr(const char *path, const char *name, const char *value,
 			size_t size, int flags)
 {
 	int res = lsetxattr(path, name, value, size, flags);
@@ -322,7 +322,7 @@ static int xmp_setxattr(const char *path, const char *name, const char *value,
 	return 0;
 }
 
-static int xmp_getxattr(const char *path, const char *name, char *value,
+static int meme_getxattr(const char *path, const char *name, char *value,
 			size_t size)
 {
 	int res = lgetxattr(path, name, value, size);
@@ -331,7 +331,7 @@ static int xmp_getxattr(const char *path, const char *name, char *value,
 	return res;
 }
 
-static int xmp_listxattr(const char *path, char *list, size_t size)
+static int meme_listxattr(const char *path, char *list, size_t size)
 {
 	int res = llistxattr(path, list, size);
 	if (res == -1)
@@ -339,7 +339,7 @@ static int xmp_listxattr(const char *path, char *list, size_t size)
 	return res;
 }
 
-static int xmp_removexattr(const char *path, const char *name)
+static int meme_removexattr(const char *path, const char *name)
 {
 	int res = lremovexattr(path, name);
 	if (res == -1)
@@ -348,38 +348,38 @@ static int xmp_removexattr(const char *path, const char *name)
 }
 #endif /* HAVE_SETXATTR */
 
-static struct fuse_operations xmp_oper = {
-	.getattr	= xmp_getattr,
-	.access		= xmp_access,
-	.readlink	= xmp_readlink,
-	.readdir	= xmp_readdir,
-	.mknod		= xmp_mknod,
-	.mkdir		= xmp_mkdir,
-	.symlink	= xmp_symlink,
-	.unlink		= xmp_unlink,
-	.rmdir		= xmp_rmdir,
-	.rename		= xmp_rename,
-	.link		= xmp_link,
-	.chmod		= xmp_chmod,
-	.chown		= xmp_chown,
-	.truncate	= xmp_truncate,
-	.utimens	= xmp_utimens,
-	.open		= xmp_open,
-	.read		= xmp_read,
-	.write		= xmp_write,
-	.statfs		= xmp_statfs,
-	.release	= xmp_release,
-	.fsync		= xmp_fsync,
+static struct fuse_operations meme_oper = {
+	.getattr	= meme_getattr,
+	.access		= meme_access,
+	.readlink	= meme_readlink,
+	.readdir	= meme_readdir,
+	.mknod		= meme_mknod,
+	.mkdir		= meme_mkdir,
+	.symlink	= meme_symlink,
+	.unlink		= meme_unlink,
+	.rmdir		= meme_rmdir,
+	.rename		= meme_rename,
+	.link		= meme_link,
+	.chmod		= meme_chmod,
+	.chown		= meme_chown,
+	.truncate	= meme_truncate,
+	.utimens	= meme_utimens,
+	.open		= meme_open,
+	.read		= meme_read,
+	.write		= meme_write,
+	.statfs		= meme_statfs,
+	.release	= meme_release,
+	.fsync		= meme_fsync,
 #ifdef HAVE_SETXATTR
-	.setxattr	= xmp_setxattr,
-	.getxattr	= xmp_getxattr,
-	.listxattr	= xmp_listxattr,
-	.removexattr	= xmp_removexattr,
+	.setxattr	= meme_setxattr,
+	.getxattr	= meme_getxattr,
+	.listxattr	= meme_listxattr,
+	.removexattr	= meme_removexattr,
 #endif
 };
 
 int main(int argc, char *argv[])
 {
 	umask(0);
-	return fuse_main(argc, argv, &xmp_oper, NULL);
+	return fuse_main(argc, argv, &meme_oper, NULL);
 }
