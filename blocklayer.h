@@ -7,6 +7,8 @@
 /* here's the blocksize, please give me buffers of at least this large */
 #define BLOCKSIZE 4096
 
+/* call this exactly once to initialize require values and datastructures */
+int block_dev_init();
 
 /* give me a blockNumber and a buffer, and I'll fill it!
    make sure the buffer is at least BLOCKSIZE large */
