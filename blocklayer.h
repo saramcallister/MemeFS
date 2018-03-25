@@ -10,6 +10,9 @@
 /* call this exactly once to initialize require values and datastructures */
 int block_dev_init();
 
+/* call when shutting down so  I can take care of things for a nice shutdown */
+int block_dev_destroy();
+
 /* give me a blockNumber and a buffer, and I'll fill it!
    make sure the buffer is at least BLOCKSIZE large */
 int read_block(int blockNum, char *buf);
