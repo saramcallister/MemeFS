@@ -21,20 +21,19 @@ struct queue_entry
   queue_entry *next;
 };
 
-int size(queue *q)
+int queue_size(const queue *q)
 {
   return q->size;
 }
 
-int push(int data, queue *q)
+int queue_push(int data, queue *q)
 {
   queue_entry *new;
   new = malloc(sizeof(struct queue_entry));
   new->data = data;
   new->next = NULL;
-  if (size(q) == 0)
+  if (queue_size(q) == 0)
   {
-    printf("pushing to empty queue\n");
     q->head = new;
     q->tail = new;
   }
@@ -48,7 +47,7 @@ int push(int data, queue *q)
 
 }
 
-int pop(queue *q)
+int queue_pop(queue *q)
 {
   queue_entry *temp;
   int retval;
@@ -84,4 +83,47 @@ queue new_queue()
   new.head = NULL;
   new.tail = NULL;
   return new;
+}
+
+int is_in(int data, const queue *q)
+{
+  struct queue_entry *ptr;
+  ptr = q->head;
+  while(ptr != NULL)
+  {
+    if (data == ptr->data)
+      return 1;
+    ptr = ptr->next;
+  }
+  return 0;
+}
+
+int queue_remove(int data, queue *q)
+{
+  struct queue_entry *last;
+  struct queue_entry *next;
+  if (queue_size(q) == 0)
+  {
+    return -1;
+  }
+
+  next = q->head;
+  if (next->data == data)
+  {
+    queue_pop(q);
+    return 0;
+  }
+  while (next != NULL)
+  {
+    if (next->data == data)
+    {
+      last->next = next->next;
+      free(next);
+      q->size -= 1;
+      return 0;
+    }
+    last = next;
+    next = next->next;
+  }
+  return -1;
 }
