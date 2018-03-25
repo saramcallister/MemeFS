@@ -9,23 +9,24 @@
 #include <sys/stat.h>
 #include <limits.h>
 
-#define QUETYPE 0
-      /*  - 0 unordered
-          - 1 ordered descending */
-
-#if QUETYPE == 0
-#include "queue.c"
-#else
-#include "queue_desc.c"
-#endif
-
 #define VERSION 0
       /*  - 0 just use a big file
           - 1 use text files
           - 2 actually use images */
 
+#define QUETYPE 0
+      /*  - 0 unordered
+          - 1 ordered descending */
 
 #define TEST 0
+
+
+#if QUETYPE == 1
+#include "queue.c"
+#else
+#include "queue_desc.c"
+#endif
+
 
 #define FILEMODE 0000666
 
@@ -377,6 +378,7 @@ static int free_cleanup()
   i = next_alloc -1;
   while (queue_remove(i, &freed_blocks) != -1)
   {
+    remove_file(i);
     next_alloc -= 1;
     i = next_alloc -1;
   }
@@ -385,7 +387,10 @@ static int free_cleanup()
 int free_block(int blockNum)
 {
   int retval;
-  remove_file(blockNum);
+  if (remove_file(blockNum) == -1)
+  {
+    printf("ERROR removing\n");
+  }
   if (blockNum == (next_alloc - 1))
   {
     next_alloc -= 1;
@@ -522,6 +527,44 @@ static int far_test()
   }
   return 0;
 }
+static int queue_test()
+{
+  int blocks[30];
+  int i;
+  char buf[BLOCKSIZE];
+  char read[BLOCKSIZE];
+  memset((char *)&buf, 'a', BLOCKSIZE);
+
+  for (i = 0; i < 30; i++)
+  {
+    blocks[i] = allocate_block();
+    if (blocks[i] == -1)
+    {
+      printf("\tERROR getting block %d\n", i);
+      return -1;
+    }
+  }
+  if(write_block(blocks[29], buf) == -1)
+  {
+    printf("\tERROR writing far block\n");
+    return -1;
+  }
+  if(read_block(blocks[29],(char*)&read) == -1)
+  {
+    printf("\tERROR reading far block\n");
+    return -1;
+  }
+  if (memcmp(read, buf, BLOCKSIZE) != 0)
+  {
+    printf("\tERROR read and write wrong\n");
+    return -1;
+  }
+  for (i = 0; i < 30; i++)
+  {
+    free_block(blocks[i]);
+  }
+  return 0;
+}
 static int run_tests()
 {
   if (basic_test() == -1)
@@ -537,6 +580,11 @@ static int run_tests()
   if (far_test() == -1)
   {
     printf("error in far test\n");
+    return -1;
+  }
+  if (queue_test() == -1)
+  {
+    printf("error in queue test\n");
     return -1;
   }
   return 0;
