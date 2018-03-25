@@ -16,8 +16,9 @@
 
 
 #define BIGFILENAME "temp_blockdev" /* only used in version 0 */
+#define BIGFILEMODE 0000666
 
-#define TEST 1
+#define TEST 0
 
 /* GLOBALS and INIT section */
 
@@ -26,10 +27,9 @@
 int bigfile;
 queue freed_blocks;
 size_t next_alloc;
-
 static int init()
 {
-  bigfile = open(BIGFILENAME, O_RDWR|O_CREAT, S_IROTH|S_IWOTH);
+  bigfile = open(BIGFILENAME, O_RDWR|O_CREAT, BIGFILEMODE);
   if (bigfile < 0)
   {
     printf("Couldn't open file");
@@ -39,7 +39,13 @@ static int init()
   next_alloc = 0;
   return 0;
 }
-
+static int destroy()
+{
+  while (size(&freed_blocks) > 0)
+  {
+    pop(&freed_blocks);
+  }
+}
 static int goto_block(int blockNum)
 {
   if(lseek(bigfile, blockNum * BLOCKSIZE, SEEK_SET) < 0)
@@ -49,12 +55,10 @@ static int goto_block(int blockNum)
   }
   return 0;
 }
-
 int block_dev_init()
 {
   return init();
 }
-
 int read_block(int blockNum, char *buf)
 {
   if (blockNum >= next_alloc)
@@ -69,7 +73,6 @@ int read_block(int blockNum, char *buf)
   }
   return 0;
 }
-
 int write_block(int blockNum, const char *buf)
 {
   goto_block(blockNum);
@@ -79,13 +82,14 @@ int write_block(int blockNum, const char *buf)
   }
   return 0;
 }
-
 int allocate_block()
 {
   int newblock;
 
   if (size(&freed_blocks) > 0)
+  {
     return pop(&freed_blocks);
+  }
   else
   {
     newblock = next_alloc;
@@ -93,7 +97,6 @@ int allocate_block()
     return newblock;
   }
 }
-
 int free_block(int blockNum)
 {
   if (blockNum == (next_alloc - 1))
@@ -106,15 +109,6 @@ int free_block(int blockNum)
     return push(blockNum, &freed_blocks);
   }
 }
-
-#elif VERSION == 1
-/* text files version */
-#else
-/* images version */
-#endif
-
-#if TEST /* include main for running some tests */
-
 int basic_test()
 {
   char write_buffer[BLOCKSIZE];
@@ -150,7 +144,120 @@ int basic_test()
   }
   return 0;
 }
+int better_test()
+{
+  int first;
+  int second;
+  int third;
+  first = allocate_block();
+  second = allocate_block();
+  third = allocate_block();
 
+  if(size(&freed_blocks) != 0)
+  {
+    printf("\tERROR freelist not empty at start\n");
+    return -1;
+  }
+  if (free_block(first) == -1)
+  {
+    printf("\tERROR freeing first block\n");
+    return -1;
+  }
+
+  if(size(&freed_blocks) != 1)
+  {
+    printf("\tERROR freelist not equal to one\n");
+    return -1;
+  }
+  if (free_block(second) == -1)
+  {
+    printf("\tERROR freeing second block\n");
+    return -1;
+  }
+
+  if(size(&freed_blocks) != 2)
+  {
+    printf("\tERROR freelist not equal to two\n");
+    return -1;
+  }
+  if (free_block(third) == -1)
+  {
+    printf("\tERROR freeing third block\n");
+    return -1;
+  }
+
+  if(size(&freed_blocks) != 2)
+  {
+    printf("\tERROR freelist not still two\n");
+    return -1;
+  }
+
+  return 0;
+}
+int far_test()
+{
+  int blocks[30];
+  int i;
+  char buf[BLOCKSIZE];
+  char read[BLOCKSIZE];
+  memset((char *)&buf, 'a', BLOCKSIZE);
+
+  for (i = 0; i < 30; i++)
+  {
+    blocks[i] = allocate_block();
+    if (blocks[i] == -1)
+    {
+      printf("\tERROR getting block %d\n", i);
+      return -1;
+    }
+  }
+  if(write_block(blocks[29], buf) == -1)
+  {
+    printf("\tERROR writing far block\n");
+    return -1;
+  }
+  if(read_block(blocks[29],(char*)&read) == -1)
+  {
+    printf("\tERROR reading far block\n");
+    return -1;
+  }
+  if (memcmp(read, buf, BLOCKSIZE) != 0)
+  {
+    printf("\tERROR read and write wrong\n");
+    return -1;
+  }
+  for (i = 29; i >= 0; i--)
+  {
+    free_block(blocks[i]);
+  }
+  return 0;
+}
+int run_tests()
+{
+  if (basic_test() == -1)
+  {
+    printf("error in basic_test\n");
+    return -1;
+  }
+  if (better_test() == -1)
+  {
+    printf("error in advanced tests\n");
+    return -1;
+  }
+  if (far_test() == -1)
+  {
+    printf("error in far test\n");
+    return -1;
+  }
+  return 0;
+}
+#elif VERSION == 1
+/* text files version */
+#else
+/* images version */
+#endif
+
+#if TEST /* include main for running some tests */
 
 
 int main(int argc, const char* argv[])
@@ -162,12 +269,8 @@ int main(int argc, const char* argv[])
     return -1;
   }
   printf("RUNNING TESTS NOW\n");
-
-  if (basic_test() == -1)
-  {
-    printf("error in basic_test\n");
+  if(run_tests() == -1)
     return -1;
-  }
 
   printf("SURVIVED TESTS!\n");
   return 0;

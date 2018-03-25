@@ -12,8 +12,6 @@ typedef struct
   size_t size;
   queue_entry *head;
   queue_entry *tail;
-
-
 } queue;
 
 
@@ -21,8 +19,12 @@ struct queue_entry
 {
   int data;
   queue_entry *next;
-
 };
+
+int size(queue *q)
+{
+  return q->size;
+}
 
 int push(int data, queue *q)
 {
@@ -30,8 +32,9 @@ int push(int data, queue *q)
   new = malloc(sizeof(struct queue_entry));
   new->data = data;
   new->next = NULL;
-  if (q->size == 0)
+  if (size(q) == 0)
   {
+    printf("pushing to empty queue\n");
     q->head = new;
     q->tail = new;
   }
@@ -40,7 +43,7 @@ int push(int data, queue *q)
     q->tail->next = new;
     q->tail = new;
   }
-  q->size += 1;
+  q->size = q->size + 1;
   return 0;
 
 }
@@ -56,13 +59,15 @@ int pop(queue *q)
   }
   else if (q->size == 1)
   {
+    q->size = 0;
     retval = q->head->data;
     free(q->head);
-    q->head == NULL;
-    q->tail == NULL;
+    q->head = NULL;
+    q->tail = NULL;
   }
   else
   {
+    q->size = q->size -1;
     retval = q->head->data;
     temp = q->head->next;
     free(q->head);
@@ -71,10 +76,6 @@ int pop(queue *q)
   return retval;
 }
 
-int size(queue *q)
-{
-  return q->size;
-}
 
 queue new_queue()
 {
