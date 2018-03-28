@@ -7,12 +7,10 @@
 #define MAX_MATCH 360
 
 
-
-int ngetmatches(size_t n, char *regex, const char *src, char *dest);
-
 int getnjpg(size_t n, const char *src, char *dest);
 
-int ngetmatches(size_t n, char *reg, const char *src, char *dest)
+
+static int ngetmatches(size_t n, char *reg, const char *src, char *dest)
 {
   regex_t regex;
   regmatch_t pmatch[2];
@@ -68,6 +66,6 @@ int ngetmatches(size_t n, char *reg, const char *src, char *dest)
 
 int getnjpg(size_t n, const char *src, char *dest)
 {
-  /* TODO filter out things containing 'thumbs' */
+  /* TODO match more with nicer regex */
   return ngetmatches(n, "https://i[^ ]*.jpg", src, dest);
 }
