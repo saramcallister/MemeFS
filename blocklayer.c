@@ -69,7 +69,7 @@ static int goto_block(int blockNum)
   }
   return 0;
 }
-int block_dev_init()
+int block_dev_init(char *cwd)
 {
   return init();
 }
@@ -292,7 +292,7 @@ queue freed_blocks;
 int next_alloc;
 
 
-int block_dev_init()
+int block_dev_init(char *cwd)
 {
   freed_blocks = new_queue();
   next_alloc = 0;
@@ -601,7 +601,7 @@ int main(int argc, const char* argv[])
   UNUSED(argc);
   UNUSED(argv);
   printf("Initializing w/ Mode: %d\n",VERSION);
-  if(block_dev_init() == -1)
+  if(block_dev_init(NULL) == -1)
   {
     printf("init failed\n");
     return -1;

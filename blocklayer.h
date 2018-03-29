@@ -8,7 +8,7 @@
 #define BLOCKSIZE 4096
 
 /* call this exactly once to initialize require values and datastructures */
-int block_dev_init();
+int block_dev_init(char *cwd);
 
 /* call when shutting down so  I can take care of things for a nice shutdown */
 int block_dev_destroy();
