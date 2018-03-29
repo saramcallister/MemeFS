@@ -9,6 +9,8 @@
 #include <sys/stat.h>
 #include <limits.h>
 
+#define TESTPATH "/home/meow/Documents/MemeFS/"
+
 #define VERSION 0
       /*  - 0 just use a big file
           - 1 use text files
@@ -40,9 +42,13 @@
 int bigfile;
 queue freed_blocks;
 int next_alloc;
+char *path;
 static int init()
 {
-  bigfile = open(BIGFILENAME, O_RDWR|O_CREAT, BIGFILEMODE);
+  char buffer[PATH_MAX] = {0};
+  strcpy((char *)&buffer, path);
+  strcat((char *)&buffer, BIGFILENAME);
+  bigfile = open((char *)&buffer, O_RDWR|O_CREAT, BIGFILEMODE);
   if (bigfile < 0)
   {
     printf("Couldn't open file");
@@ -54,6 +60,7 @@ static int init()
 }
 static int destroy()
 {
+  close(bigfile);
   while (queue_size(&freed_blocks) > 0)
   {
     queue_pop(&freed_blocks);
@@ -71,6 +78,7 @@ static int goto_block(int blockNum)
 }
 int block_dev_init(char *cwd)
 {
+  path = strdup(cwd);
   return init();
 }
 int block_dev_destroy()
@@ -290,10 +298,11 @@ static int run_tests()
 /* globals */
 queue freed_blocks;
 int next_alloc;
-
+char *path;
 
 int block_dev_init(char *cwd)
 {
+  path = strdup(cwd);
   freed_blocks = new_queue();
   next_alloc = 0;
   return 0;
@@ -308,7 +317,10 @@ int block_dev_destroy()
 }
 static int int_to_name(int val, char *name)
 {
-  snprintf(name, NAME_MAX, "%d%s", val, EXTENTION);
+  char buffer[NAME_MAX] = {0};
+  snprintf((char *)&buffer, NAME_MAX, "%d%s", val, EXTENTION);
+  strcpy(name, path);
+  strcat(name, (char*)&buffer);
   return 0;
 }
 int read_block(int blockNum, char *buf)
@@ -601,7 +613,7 @@ int main(int argc, const char* argv[])
   UNUSED(argc);
   UNUSED(argv);
   printf("Initializing w/ Mode: %d\n",VERSION);
-  if(block_dev_init(NULL) == -1)
+  if(block_dev_init(TESTPATH) == -1)
   {
     printf("init failed\n");
     return -1;
