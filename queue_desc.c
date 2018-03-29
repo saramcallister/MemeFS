@@ -102,7 +102,7 @@ int queue_destroy(queue *q)
 {
   while (queue_size(q) > 0)
   {
-    string_queue_pop(q);
+    queue_pop(q);
   }
   q->head = NULL;
   q->tail = NULL;

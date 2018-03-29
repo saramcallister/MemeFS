@@ -86,7 +86,7 @@ string_queue new_string_queue()
   return new;
 }
 
-int is_in(char* data, const string_queue *q)
+int string_is_in(char* data, const string_queue *q)
 {
   struct string_queue_entry *ptr;
   ptr = q->head;
