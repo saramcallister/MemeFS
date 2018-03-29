@@ -6,9 +6,11 @@
 #include "url2file.c"
 #include "string_queue.c"
 
-#define RSSFEED "https://www.reddit.com/r/dankmemes/.rss?sort=new"
+#define RSSFEED "https://www.reddit.com/r/me_irl.rss?sort=new&limit=50"
 
 #define FOLDRNAME "memes/" /*TODO make this work */
+
+#define GETSIZE 50
 
 #define MEMEDL_TESTS 0
 
@@ -48,12 +50,12 @@ static char *filenameget(const char* url)
 
 static string_queue get_url_queue()
 {
-  char buffer[20][MAX_MATCH];
+  char buffer[GETSIZE][MAX_MATCH];
   char *new;
   int r;
   int i;
   string_queue urls = new_string_queue();
-  r = nmemeurls(20,(char*)&buffer);
+  r = nmemeurls(GETSIZE,(char*)&buffer);
   if (r < 1)
     return new_string_queue();
   for (i = 0; i < r; i++)
@@ -104,7 +106,7 @@ int main(int argc, char const *argv[])
   char *new;
   int i;
   memedl_init();
-  for (i = 0; i < 10; i++)
+  for (i = 0; i < GETSIZE; i++)
   {
     new = get_meme();
     printf("GOT %s\n", new);
