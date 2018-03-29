@@ -85,6 +85,18 @@ queue new_queue()
   return new;
 }
 
+int queue_destroy(queue *q)
+{
+  while (queue_size(q) > 0)
+  {
+    string_queue_pop(q);
+  }
+  q->head = NULL;
+  q->tail = NULL;
+  return 0;
+}
+
+
 int is_in(int data, const queue *q)
 {
   struct queue_entry *ptr;
