@@ -38,7 +38,7 @@
 
 #define TEST 0
 
-#define WORKTEST 0
+#define WORKTEST 1
 
 
 #if QUETYPE == 0
@@ -329,7 +329,11 @@ int block_dev_destroy()
 }
 static int int_to_name(int val, char *name)
 {
-  snprintf(name, NAME_MAX, "%d%s", val, EXTENTION);
+  char *dest;
+  char fldr[] = FOLDRNAME;
+  dest = name + strlen(fldr);
+  strcpy(name, (char*)&fldr);
+  snprintf(dest, NAME_MAX, "%d%s", val, EXTENTION);
   return 0;
 }
 int read_block(int blockNum, char *buf)
@@ -631,7 +635,11 @@ static int new_meme(char *path)
 }
 static int int_to_name(int val, char *name)
 {
-  snprintf(name, NAME_MAX, "%d%s", val, EXTENTION);
+  char *dest;
+  char fldr[] = FOLDRNAME;
+  dest = name + strlen(fldr);
+  strcpy(name, (char*)&fldr);
+  snprintf(dest, NAME_MAX, "%d%s", val, EXTENTION);
   return 0;
 }
 int block_dev_init()

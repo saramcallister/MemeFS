@@ -11,7 +11,7 @@
 #if MEMEDL_TESTS == 0
 #define RSSFEED "https://www.reddit.com/r/me_irl.rss?sort=new&limit=50"
 
-#define FOLDRNAME "memes/"
+#define DLFOLDRNAME ".dl/"
 
 #define GETSIZE 50
 
@@ -76,7 +76,7 @@ static char *url_queue_pop(string_queue *q)
   char *url;
   char *ptr;
 
-  strcpy((char*)&dest, FOLDRNAME);
+  strcpy((char*)&dest, DLFOLDRNAME);
   url = string_queue_pop(q);
 
   ptr = filenameget(url);
