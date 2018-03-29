@@ -39,7 +39,6 @@ static int ngetmatches(size_t n, char *reg, const char *src, char *dest)
     if (regexec(&regex, cursor, 2, (regmatch_t *)&pmatch, 0) != 0)
     {
       /*printf("No more matches: stopped at %ld\n", i);*/
-      regfree(&regex);
       break;
     }
     else{
@@ -59,7 +58,7 @@ static int ngetmatches(size_t n, char *reg, const char *src, char *dest)
       count += 1;
     }
   }
-
+  regfree(&regex);
   /*printf("Found %ld matches\n", count);*/
   return count;
 }

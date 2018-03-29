@@ -8,7 +8,7 @@
 
 #define RSSFEED "https://www.reddit.com/r/me_irl.rss?sort=new&limit=50"
 
-#define FOLDRNAME "memes/" /*TODO make this work */
+#define FOLDRNAME "memes/"
 
 #define GETSIZE 50
 
@@ -19,7 +19,6 @@ int memedl_init();
 
 /* will download a BRAND NEW* meme and return you the filename
 * *brand new relies on some assumptions about how frequently you ask
-* for new memes, and currently isn't working well TODO improve turnover rate
 */
 char *get_meme();
 
@@ -68,15 +67,19 @@ static string_queue get_url_queue()
 
 static char *url_queue_pop(string_queue *q)
 {
+  char dest[MAX_MATCH];
   char *url;
-  char *filename;
+  char *ptr;
 
+  strcpy((char*)&dest, FOLDRNAME);
   url = string_queue_pop(q);
 
-  filename = strdup(filenameget(url));
-  /* TODO directory support? */
-  url2file(url, filename);
-  return filename;
+  ptr = filenameget(url);
+  strcat((char*)&dest,ptr);
+  url2file(url, (char*)&dest);
+  free(url);
+  ptr = strdup((char*)&dest);
+  return ptr;
 }
 
 char *get_meme()
@@ -112,7 +115,7 @@ int main(int argc, char const *argv[])
     printf("GOT %s\n", new);
     free(new);
   }
-
+  new = NULL;
   memedl_destroy();
   return 0;
 }

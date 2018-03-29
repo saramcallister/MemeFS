@@ -136,6 +136,8 @@ int string_queue_destroy(string_queue *q)
   {
     free(string_queue_pop(q));
   }
+  q->head = NULL;
+  q->tail = NULL;
   return 0;
 }
 
