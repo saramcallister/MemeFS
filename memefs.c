@@ -31,6 +31,42 @@
 #include <sys/xattr.h>
 #endif
 
+#include "blocklayer.h"
+
+/* Chosen to make sizeof(inode) 128 bytes */
+#define MAX_NAME_SIZE = 88;
+
+/* Refers to the size of data field in the metadata for a file
+ * With SIZE_OF_DATA equal to 8, data has 6 direct blocks, 
+ * 1 singly indirect block, 1 doubly indirect block */
+#define SIZE_OF_DATA = 8;
+
+typedef struct {
+	mode_t mode;
+	size_t size;
+	size_t data[];
+	char name[MAX_NAME_SIZE];	
+} inode;
+
+typedef struct {
+	inode root_inode;
+	size_t superblock_size;
+	size_t block_size;
+	char magic_number;
+} superblock;
+
+statric char *current_path; /* Path starting directory */
+
+void *meme_init(struct fuse_conn_info *conn)
+{
+	/* Initialize block layer */
+	block_dev_init();
+}
+
+void meme_destry(void *private_data) {
+	free(current_data);
+}
+
 static int meme_getattr(const char *path, struct stat *stbuf)
 {
 	int res;
@@ -380,6 +416,7 @@ static struct fuse_operations meme_oper = {
 
 int main(int argc, char *argv[])
 {
+	current_path = get_current_dir_name();
 	umask(0);
 	return fuse_main(argc, argv, &meme_oper, NULL);
 }
