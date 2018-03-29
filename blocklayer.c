@@ -632,6 +632,7 @@ static int new_meme(char *path)
   char* old;
   old = get_meme();
   rename(old, path);
+  return 0;
 }
 static int int_to_name(int val, char *name)
 {
@@ -647,11 +648,13 @@ int block_dev_init()
   memedl_init();
   freed_blocks = new_queue();
   next_alloc = 0;
+  return 0;
 }
 int block_dev_destroy()
 {
   memedl_destroy();
   queue_destroy(&freed_blocks);
+  return 0;
 }
 static int image_read(const char *path, char *buf)
 {

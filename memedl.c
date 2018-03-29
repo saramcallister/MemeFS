@@ -99,11 +99,13 @@ char *get_meme()
 int memedl_init()
 {
   url_queue = get_url_queue();
+  return 0;
 }
 
 int memedl_destroy()
 {
   string_queue_destroy(&url_queue);
+  return 0;
 }
 
 
