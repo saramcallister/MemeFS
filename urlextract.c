@@ -4,9 +4,6 @@
 #include <sys/types.h>
 #include <stdlib.h>
 
-#define MAX_MATCH 360
-
-
 int getnjpg(size_t n, const char *src, char *dest);
 
 

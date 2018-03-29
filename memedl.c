@@ -6,13 +6,18 @@
 #include "url2file.c"
 #include "string_queue.c"
 
+#define MEMEDL_TESTS 0
+
+#if MEMEDL_TESTS == 0
 #define RSSFEED "https://www.reddit.com/r/me_irl.rss?sort=new&limit=50"
 
 #define FOLDRNAME "memes/"
 
 #define GETSIZE 50
 
-#define MEMEDL_TESTS 0
+#define MAX_MATCH 360
+
+#endif
 
 /* initializes required stuff for get_meme */
 int memedl_init();

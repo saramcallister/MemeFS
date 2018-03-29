@@ -18,15 +18,32 @@
       /*  - 0 unordered
           - 1 ordered descending */
 
+
+/* the url of the RSS feed from which to download memes */
+#define RSSFEED "https://www.reddit.com/r/me_irl.rss?sort=new&limit=50"
+
+/* folder for memes to be stored in, currently a compile time arg */
+#define FOLDRNAME "memes/"
+
+/* Max number of memes to try and "preload" at a time
+ * a pre-loaded meme isn't downloaded, just its url saved for future downloading
+*/
+#define GETSIZE 50
+
+/* max length of urls to grab */
+#define MAX_MATCH 360
+
+
+
+
 #define TEST 0
 
 
-#if QUETYPE == 1
+#if QUETYPE == 0
 #include "queue.c"
 #else
 #include "queue_desc.c"
 #endif
-
 
 #define FILEMODE 0000666
 
@@ -284,6 +301,8 @@ static int run_tests()
   }
   return 0;
 }
+
+
 #elif VERSION == 1
 /* many files version */
 #define EXTENTION ".txt"
