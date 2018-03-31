@@ -21,6 +21,7 @@
 
 #include <fuse.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -33,11 +34,11 @@
 
 #include "blocklayer.h"
 
-#define NUM_DIRECT_BLOCKS = 6;
-#define NUM_SINGLY_INDIRECT_BLOCKS = 1;
-#define NUM_DOUBLY_INDIRECT_BLOCKS = 1;
-#define MAGIC_NUMBER = 0x1337;
-#define MAX_NAME_SIZE = 32;
+#define NUM_DIRECT_BLOCKS 6
+#define NUM_SINGLY_INDIRECT_BLOCKS 1
+#define NUM_DOUBLY_INDIRECT_BLOCKS 1
+#define MAGIC_NUMBER 0x1337
+#define MAX_NAME_SIZE 32
 
 typedef struct {
 	size_t direct[NUM_DIRECT_BLOCKS];
@@ -50,7 +51,7 @@ typedef struct {
 	size_t inode_number;
 	size_t size;
 	block_list data;
-	char padding[64 - 4*(sizeof(block_list) + 3)];	
+	char padding[20];	
 } inode;
 
 typedef struct {
@@ -72,10 +73,14 @@ static inode inode_table[BLOCKSIZE/sizeof(inode)];
 
 block_list zero_block_list() 
 {
+	size_t direct[NUM_DIRECT_BLOCKS] = {0};
+	size_t singly_indirect[NUM_SINGLY_INDIRECT_BLOCKS] = {0};
+	size_t doubly_indirect[NUM_DOUBLY_INDIRECT_BLOCKS] = {0};
 	block_list zeroed_data;
-	zeroed_data.direct = {0};
-	zeroed_data.singly_indirect = {0};
-	zeroed_data.doubly_indirect = {0};
+
+	memcpy(zeroed_data.direct, direct, sizeof(direct));
+	memcpy(zeroed_data.singly_indirect, singly_indirect, sizeof(singly_indirect));
+	memcpy(zeroed_data.doubly_indirect, doubly_indirect, sizeof(doubly_indirect));
 	return zeroed_data;
 }
 
@@ -91,7 +96,7 @@ void *meme_init(struct fuse_conn_info *conn)
 
 	/* Read superblock */
 	read_block(0, buf);
-	memcpy(superblock, buf, sizeof(mem_superblock));
+	memcpy(&superblock, buf, sizeof(meme_superblock));
 	
 	/* check if file system already exists */
 	if (superblock.magic_number == MAGIC_NUMBER) {
@@ -105,8 +110,8 @@ void *meme_init(struct fuse_conn_info *conn)
 	root_inode.mode = S_IFDIR | 700;
 	root_inode.inode_number = 0;
 	root_inode.size = 2*sizeof(dir_entry);
-	root_inode.block_list = zero_block_list;
-	root_inode.block_list.direct[0] = allocate_block();
+	root_inode.data = zero_block_list();
+	root_inode.data.direct[0] = allocate_block();
 
 	superblock.magic_number = MAGIC_NUMBER;
 	superblock.current_size = 2*BLOCKSIZE;
@@ -119,11 +124,11 @@ void *meme_init(struct fuse_conn_info *conn)
 
 	/* write '.' and '..' to root directory */
 	default_files.inode_number = 0;
-	default_files.name = ".";
-	memcpy(buf, default_files, sizeof(dir_entry));
-	default_files.name = "..";
-	memcpy(buf + sizeof(dir_entry), default_files, sizeof(dir_entry));
-	write_block(root_inode.block_list.direct[0], buf);
+	strncpy(default_files.name, ".", MAX_NAME_SIZE);
+	memcpy(buf, &default_files, sizeof(dir_entry));
+	strncpy(default_files.name, "..", MAX_NAME_SIZE);
+	memcpy(buf + sizeof(dir_entry), &default_files, sizeof(dir_entry));
+	write_block(root_inode.data.direct[0], buf);
 
 	return NULL;
 }
@@ -131,8 +136,8 @@ void *meme_init(struct fuse_conn_info *conn)
 void meme_destroy(void *private_data) {
 	char buf[BLOCKSIZE];
 
-	wrtie_block(superblock.inode_block, inode_table);
-	memcpy(buf, superblock, sizeof(superblock));
+	write_block(superblock.inode_block, (char *) inode_table);
+	memcpy(buf, &superblock, sizeof(superblock));
 	write_block(0, buf);
 
 	block_dev_destroy();
