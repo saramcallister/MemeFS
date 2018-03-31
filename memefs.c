@@ -107,6 +107,7 @@ void *meme_init(struct fuse_conn_info *conn)
 	}
 
 	/* if file system does not already exist, create superblock */
+	allocate_block() // save first block for superblock
 	root_inode.mode = S_IFDIR | 700;
 	root_inode.inode_number = 0;
 	root_inode.size = 2*sizeof(dir_entry);
