@@ -5,8 +5,10 @@ DEPS = blocklayer.h jsteg.h
 OBJ = memefs.o blocklayer.o queue.o queue_desc.o
 
 _GOFILES = main.go reader.go writer.go scan.go huffman.go fdct.go
-GOFILES = $(patsubst %,jsteg/%,$(_DEPS))
+GOFILES = $(patsubst %,jsteg/%,$(_GOFILES))
 
+memefs: $(OBJ) jsteg.a
+	gcc -o $@ $^ $(CFLAGS) $(PKGFLAGS)
 
 jsteg.a: $(GOFILES)
 	go build -buildmode=c-archive -o jsteg.a $(GOFILES)
@@ -19,10 +21,7 @@ jsteg.h: jsteg.a
 	fi
 
 %.o: %.c $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS)
-
-memefs: $(OBJ) jsteg.a
-	gcc -o $@ $^ $(CFLAGS) $(PKGFLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS) $(PKGFLAGS)
 
 .PHONY: clean
 
