@@ -33,38 +33,110 @@
 
 #include "blocklayer.h"
 
-/* Chosen to make sizeof(inode) 128 bytes */
-#define MAX_NAME_SIZE = 88;
+#define NUM_DIRECT_BLOCKS = 6;
+#define NUM_SINGLY_INDIRECT_BLOCKS = 1;
+#define NUM_DOUBLY_INDIRECT_BLOCKS = 1;
+#define MAGIC_NUMBER = 0x1337;
+#define MAX_NAME_SIZE = 32;
 
-/* Refers to the size of data field in the metadata for a file
- * With SIZE_OF_DATA equal to 8, data has 6 direct blocks, 
- * 1 singly indirect block, 1 doubly indirect block */
-#define SIZE_OF_DATA = 8;
+typedef struct {
+	size_t direct[NUM_DIRECT_BLOCKS];
+	size_t singly_indirect[NUM_SINGLY_INDIRECT_BLOCKS];
+	size_t doubly_indirect[NUM_DOUBLY_INDIRECT_BLOCKS];
+} block_list;
 
 typedef struct {
 	mode_t mode;
+	size_t inode_number;
 	size_t size;
-	size_t data[];
-	char name[MAX_NAME_SIZE];	
+	block_list data;
+	char padding[64 - 4*(sizeof(block_list) + 3)];	
 } inode;
 
 typedef struct {
-	inode root_inode;
-	size_t superblock_size;
-	size_t block_size;
-	char magic_number;
-} superblock;
+	size_t inode_number;
+	char name[MAX_NAME_SIZE];
+} dir_entry;
 
-statric char *current_path; /* Path starting directory */
+typedef struct {
+	inode root_inode;
+	size_t current_size;
+	size_t magic_number;
+	size_t num_inodes_used;
+	size_t inode_block;
+} meme_superblock;
+
+static char *current_path; /* Path starting directory */
+static meme_superblock superblock;
+static inode inode_table[BLOCKSIZE/sizeof(inode)];
+
+block_list zero_block_list() 
+{
+	block_list zeroed_data;
+	zeroed_data.direct = {0};
+	zeroed_data.singly_indirect = {0};
+	zeroed_data.doubly_indirect = {0};
+	return zeroed_data;
+}
 
 void *meme_init(struct fuse_conn_info *conn)
 {
+	char buf[BLOCKSIZE];
+	inode root_inode;
+	dir_entry default_files;
+	size_t inode_block;
+
 	/* Initialize block layer */
-	block_dev_init();
+	block_dev_init(current_path);
+
+	/* Read superblock */
+	read_block(0, buf);
+	memcpy(superblock, buf, sizeof(mem_superblock));
+	
+	/* check if file system already exists */
+	if (superblock.magic_number == MAGIC_NUMBER) {
+		/* read inode table */
+		read_block(superblock.inode_block, buf);
+		memcpy(inode_table, buf, BLOCKSIZE);
+		return NULL;
+	}
+
+	/* if file system does not already exist, create superblock */
+	root_inode.mode = S_IFDIR | 700;
+	root_inode.inode_number = 0;
+	root_inode.size = 2*sizeof(dir_entry);
+	root_inode.block_list = zero_block_list;
+	root_inode.block_list.direct[0] = allocate_block();
+
+	superblock.magic_number = MAGIC_NUMBER;
+	superblock.current_size = 2*BLOCKSIZE;
+	superblock.root_inode = root_inode;
+	superblock.num_inodes_used = 1;
+	superblock.inode_block = allocate_block();
+
+	/* initialize inode_table */
+	inode_table[0] = root_inode;
+
+	/* write '.' and '..' to root directory */
+	default_files.inode_number = 0;
+	default_files.name = ".";
+	memcpy(buf, default_files, sizeof(dir_entry));
+	default_files.name = "..";
+	memcpy(buf + sizeof(dir_entry), default_files, sizeof(dir_entry));
+	write_block(root_inode.block_list.direct[0], buf);
+
+	return NULL;
 }
 
-void meme_destry(void *private_data) {
-	free(current_data);
+void meme_destroy(void *private_data) {
+	char buf[BLOCKSIZE];
+
+	wrtie_block(superblock.inode_block, inode_table);
+	memcpy(buf, superblock, sizeof(superblock));
+	write_block(0, buf);
+
+	block_dev_destroy();
+	free(current_path);
 }
 
 static int meme_getattr(const char *path, struct stat *stbuf)
