@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS = -g -Og
+CFLAGS = -g -Og -Wall
 PKGFLAGS = `pkg-config fuse --cflags --libs`
 DEPS = blocklayer.h jsteg.h
 OBJ = memefs.o blocklayer.o queue.o queue_desc.o
