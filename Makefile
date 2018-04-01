@@ -1,32 +1,29 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -lcurl
+CC=gcc
+CFLAGS = -g -Og -Wall
+PKGFLAGS = `pkg-config fuse --cflags --libs` -lcurl
+DEPS = blocklayer.h jsteg.h queue.c queue_desc.c
+OBJ = memefs.o blocklayer.o
 
+_GOFILES = main.go reader.go writer.go scan.go huffman.go fdct.go
+GOFILES = $(patsubst %,jsteg/%,$(_GOFILES))
 
-all: blocklayer.o
+memefs: $(OBJ) jsteg.a
+	gcc -pthread -o $@ $^ $(CFLAGS) $(PKGFLAGS)
 
-blocklayer.o: blocklayer.c blocklayer.h memedl.o queue.o queue_desc.o
-	$(CC) -c blocklayer.c $(CFLAGS)
+jsteg.a: $(GOFILES)
+	go build -buildmode=c-archive -o jsteg.a $(GOFILES)
 
-memedl.o: memedl.c getinmemory.o urlextract.o url2file.o string_queue.o
-	$(CC) -c memedl.c $(CFLAGS)
+jsteg.h: jsteg.a
+## Recover from the removal of $@
+	@if test -f $@; then :; else \
+	  rm -f jsteg.a; \
+	  $(MAKE) $(AM_MAKEFLAGS) jsteg.a; \
+	fi
 
-getinmemory.o: getinmemory.c
-	$(CC) -c getinmemory.c $(CFLAGS)
+%.o: %.c $(DEPS)
+	$(CC) -c -o $@ $< $(CFLAGS) $(PKGFLAGS)
 
-urlextract.o: urlextract.c
-	$(CC) -c urlextract.c $(CFLAGS)
-
-url2file.o: url2file.c
-	$(CC) -c url2file.c $(CFLAGS)
-
-queue.o: queue.c
-	$(CC) -c queue.c $(CFLAGS)
-
-queue_desc.o: queue_desc.c
-	$(CC) -c queue_desc.c $(CFLAGS)
-
-string_queue.o: string_queue.c
-	$(CC) -c string_queue.c $(CFLAGS)
+.PHONY: clean
 
 clean:
-	rm *.o
+	rm -f *.o jsteg.a jsteg.h
