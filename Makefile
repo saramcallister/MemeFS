@@ -1,8 +1,8 @@
 CC=gcc
 CFLAGS = -g -Og -Wall
-PKGFLAGS = `pkg-config fuse --cflags --libs`
-DEPS = blocklayer.h jsteg.h
-OBJ = memefs.o blocklayer.o queue.o queue_desc.o
+PKGFLAGS = `pkg-config fuse --cflags --libs` -lcurl
+DEPS = blocklayer.h jsteg.h queue.c queue_desc.c
+OBJ = memefs.o blocklayer.o
 
 _GOFILES = main.go reader.go writer.go scan.go huffman.go fdct.go
 GOFILES = $(patsubst %,jsteg/%,$(_GOFILES))
