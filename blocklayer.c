@@ -11,7 +11,7 @@
 
 #define TESTPATH "/home/meow/Documents/MemeFS/"
 
-#define VERSION 2
+#define VERSION 1
       /*  - 0 just use a big file
           - 1 use text files
           - 2 actually use images */
@@ -38,7 +38,7 @@
 /* TODO properly optimize for ordered queues */
 
 
-#define TEST 1
+#define TEST 0
 
 #define WORKTEST 0
 
@@ -102,7 +102,7 @@ int block_dev_init(char *cwd)
 }
 int block_dev_destroy()
 {
-  free(cwd);
+  free(path);
   return destroy();
 }
 int read_block(int blockNum, char *buf)
@@ -335,7 +335,7 @@ int block_dev_destroy()
   {
     queue_pop(&freed_blocks);
   }
-  free(cwd);
+  free(path);
   return 0;
 }
 static int int_to_name(int val, char *name)

@@ -8,7 +8,7 @@
 
 #define MEMEDL_TESTS 0
 
-#if MEMEDL_TESTS == 0
+#if MEMEDL_TESTS
 #define RSSFEED "https://www.reddit.com/r/me_irl.rss?sort=new&limit=50"
 
 #define DLFOLDRNAME ".dl/"
