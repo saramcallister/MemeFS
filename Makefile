@@ -1,7 +1,7 @@
 CC=gcc
-CFLAGS = -g -Og -Wall
+CFLAGS = -g -Og -Wall -Wextra
 PKGFLAGS = `pkg-config fuse --cflags --libs` -lcurl
-DEPS = blocklayer.h jsteg.h queue.c queue_desc.c
+DEPS = blocklayer.h jsteg.h
 OBJ = memefs.o blocklayer.o
 
 _GOFILES = main.go reader.go writer.go scan.go huffman.go fdct.go
@@ -20,10 +20,13 @@ jsteg.h: jsteg.a
 	  $(MAKE) $(AM_MAKEFLAGS) jsteg.a; \
 	fi
 
+blocklayer.o: blocklayer.c $(DEPS) queue.c queue_desc.c
+	$(CC) -c -o $@ $< $(CFLAGS) $(PKGFLAGS)
+
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS) $(PKGFLAGS)
 
 .PHONY: clean
 
 clean:
-	rm -f *.o jsteg.a jsteg.h
+	rm -f *.o jsteg.a jsteg.h memefs
