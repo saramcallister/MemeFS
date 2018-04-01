@@ -8,7 +8,7 @@ _GOFILES = main.go reader.go writer.go scan.go huffman.go fdct.go
 GOFILES = $(patsubst %,jsteg/%,$(_GOFILES))
 
 memefs: $(OBJ) jsteg.a
-	gcc -o $@ $^ $(CFLAGS) $(PKGFLAGS)
+	gcc -pthread -o $@ $^ $(CFLAGS) $(PKGFLAGS)
 
 jsteg.a: $(GOFILES)
 	go build -buildmode=c-archive -o jsteg.a $(GOFILES)
