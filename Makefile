@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS = -g -Og -Wall
 PKGFLAGS = `pkg-config fuse --cflags --libs` -lcurl
-DEPS = blocklayer.h jsteg.h queue.c queue_desc.c
+DEPS = blocklayer.h jsteg.h queue.c queue_desc.c string_queue.c memedl.c urlextract.c 
 OBJ = memefs.o blocklayer.o
 
 _GOFILES = main.go reader.go writer.go scan.go huffman.go fdct.go
