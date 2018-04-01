@@ -23,8 +23,6 @@ jsteg.h: jsteg.a
 blocklayer.o: blocklayer.c $(DEPS) queue.c queue_desc.c memedl.c
 	$(CC) -c -o $@ $< $(CFLAGS) $(PKGFLAGS)
 
-memedl.o: memedl.c $(DEPS) getinmemory.c urlextract.c url2file.c string_queue.c
-	$(CC) -c -o $@ $< $(CFLAGS) $(PKGFLAGS)
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS) $(PKGFLAGS)
