@@ -146,14 +146,54 @@ void meme_destroy(void *private_data) {
 	free(current_path);
 }
 
+/* Find inode location in inode table for given path,
+ * Returns -1 if cannot be found */
+int find_inode_loc(const char *path) 
+{
+	size_t inode_loc = 0;
+	char *path_copy;
+	char *token;
+	size_t num_entries;
+	dir_entry buf[BLOCKSIZE/sizeof(dir_entry)];
+	size_t i;
+
+	path_copy = (char *) malloc(strlen(path) + 1);
+	strcpy(path_copy, path);
+
+	token = strtok(path_copy, "/");
+	while (token) {
+		num_entries = inode_table[inode_loc].size / sizeof(dir_entry);
+		// TODO: modify to work with more than 1 block's worth of dir_entries
+		read_block(inode_table[inode_loc].data.direct[1], (char *) buf); 
+		for (i = 0; i < num_entries; i++) {
+			if (!strcmp(buf[i].name, token)) {
+				break;
+			} else if (i == num_entries - 1) {
+				return -1; // File not found
+			}
+		}
+
+		inode_loc = buf[i].inode_number;
+		token = strtok(NULL, "/");
+	}
+
+	return inode_loc;
+}
+
 static int meme_getattr(const char *path, struct stat *stbuf)
 {
-	int res;
-
-	res = lstat(path, stbuf);
-	if (res == -1)
-		return -errno;
-
+	int res = 0;
+	
+	res = find_inode_loc(path);
+	if (strcmp(path, "/") == 0) {
+		stbuf->st_mode = superblock.root_inode.mode;
+		stbuf->st_nlink = 2;
+	} else if (res == -1) {
+		return -ENOENT;
+	} else {
+		stbuf->st_mode = inode_table[res].mode;
+		stbuf->st_nlink = 2;
+	}
 	return 0;
 }
 
@@ -161,9 +201,12 @@ static int meme_access(const char *path, int mask)
 {
 	int res;
 
-	res = access(path, mask);
-	if (res == -1)
-		return -errno;
+	res = find_inode_loc(path);
+	if (res == -1){
+		return -ENOENT;
+	} else if (!(inode_table[res].mode & mask)) {
+		return -EACCES;
+	}
 
 	return 0;
 }
