@@ -17,6 +17,7 @@
 #ifdef linux
 /* For pread()/pwrite() */
 #define _XOPEN_SOURCE 500
+#define _GNU_SOURCE
 #endif
 
 #include <fuse.h>
@@ -28,6 +29,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <sys/time.h>
+#include <unistd.h>
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
 #endif
@@ -51,7 +53,7 @@ typedef struct {
 	size_t inode_number;
 	size_t size;
 	block_list data;
-	char padding[20];	
+	char padding[36];	
 } inode;
 
 typedef struct {
@@ -89,7 +91,6 @@ void *meme_init(struct fuse_conn_info *conn)
 	char buf[BLOCKSIZE];
 	inode root_inode;
 	dir_entry default_files;
-	size_t inode_block;
 
 	/* Initialize block layer */
 	block_dev_init(current_path);
@@ -107,7 +108,7 @@ void *meme_init(struct fuse_conn_info *conn)
 	}
 
 	/* if file system does not already exist, create superblock */
-	allocate_block() // save first block for superblock
+	allocate_block(); // save first block for superblock
 	root_inode.mode = S_IFDIR | 700;
 	root_inode.inode_number = 0;
 	root_inode.size = 2*sizeof(dir_entry);
