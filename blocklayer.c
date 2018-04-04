@@ -11,24 +11,43 @@
 
 #define TESTPATH "/home/meow/Documents/MemeFS/"
 
-#define VERSION 0
+#define VERSION 1
       /*  - 0 just use a big file
           - 1 use text files
           - 2 actually use images */
 
-#define QUETYPE 0
+#define QUETYPE 1
       /*  - 0 unordered
           - 1 ordered descending */
 
+
+/* the url of the RSS feed from which to download memes */
+#define RSSFEED "https://www.reddit.com/r/me_irl.rss?sort=new&limit=50"
+
+/* folder for memes to be stored in, currently a compile time arg */
+#define FOLDRNAME "memes/"
+
+/* Max number of memes to try and "preload" at a time
+ * a pre-loaded meme isn't downloaded, just its url saved for future downloading
+*/
+#define GETSIZE 50
+
+/* max length of urls to grab */
+#define MAX_MATCH 360
+
+/* TODO properly optimize for ordered queues */
+
+
 #define TEST 0
 
+#define WORKTEST 0
 
-#if QUETYPE == 1
+
+#if QUETYPE == 0
 #include "queue.c"
 #else
 #include "queue_desc.c"
 #endif
-
 
 #define FILEMODE 0000666
 
@@ -83,6 +102,7 @@ int block_dev_init(char *cwd)
 }
 int block_dev_destroy()
 {
+  free(path);
   return destroy();
 }
 int read_block(int blockNum, char *buf)
@@ -292,6 +312,8 @@ static int run_tests()
   }
   return 0;
 }
+
+
 #elif VERSION == 1
 /* many files version */
 #define EXTENTION ".txt"
@@ -313,6 +335,7 @@ int block_dev_destroy()
   {
     queue_pop(&freed_blocks);
   }
+  free(path);
   return 0;
 }
 static int int_to_name(int val, char *name)
@@ -601,8 +624,336 @@ static int run_tests()
   }
   return 0;
 }
+
 #else
 /* images version */
+/* TODO replace stubs */
+/* TODO write error safe code */
+/* TODO support directory stuffs */
+#include "memedl.c"
+#define EXTENTION ".jpg"
+
+/* globals */
+queue freed_blocks;
+int next_alloc;
+char *path;
+
+static int new_meme(char *path)
+{
+  char* old;
+  old = get_meme();
+  rename(old, path);
+  return 0;
+}
+static int int_to_name(int val, char *name)
+{
+  char buffer[NAME_MAX] = {0};
+  snprintf((char *)&buffer, NAME_MAX, "%d%s", val, EXTENTION);
+  strcpy(name, path);
+  strcat(name, (char*)&buffer);
+  return 0;
+}
+int block_dev_init(char *cwd)
+{
+  memedl_init();
+  freed_blocks = new_queue();
+  next_alloc = 0;
+  path = strdup(cwd);
+  return 0;
+}
+int block_dev_destroy()
+{
+  memedl_destroy();
+  queue_destroy(&freed_blocks);
+  free(path);
+  return 0;
+}
+static int image_read(const char *path, char *buf)
+{
+  /* stub temp for stenography */
+  return 0;
+}
+static int image_write(const char *path, const char* buf)
+{
+  /* stub temp for stenography */
+  return 0;
+}
+int read_block(int blockNum, char *buf)
+{
+  char filename[NAME_MAX];
+  if (blockNum >= next_alloc)
+  {
+    /* I'm being asked about a block you definetly havent alloced yet */
+    return -1;
+  }
+  int_to_name(blockNum, (char *) &filename);
+  image_read((char*)&filename,buf);
+  return 0;
+}
+int write_block(int blockNum, const char *buf)
+{
+  char filename[NAME_MAX];
+  if (blockNum >= next_alloc)
+  {
+    /* I'm being asked about a block you definetly havent alloced yet */
+    return -1;
+  }
+  int_to_name(blockNum, (char *) &filename);
+  remove((char*)&filename);
+  new_meme((char*)&filename);
+  image_write((char*)&filename, buf);
+  return 0;
+}
+int allocate_block()
+{
+  int newblock;
+  char buffer[BLOCKSIZE] = {0};
+  char filename[NAME_MAX];
+
+
+  if (queue_size(&freed_blocks) > 0)
+  {
+    newblock = queue_pop(&freed_blocks);
+  }
+  else
+  {
+    newblock = next_alloc;
+    next_alloc += 1;
+  }
+  int_to_name(newblock, (char *) &filename);
+  new_meme((char*)&filename);
+  image_write((char*)&filename, buffer);
+  return newblock;
+}
+static int free_cleanup()
+{
+  int i;
+  char filename[NAME_MAX];
+
+  i = next_alloc -1;
+  while (queue_remove(i, &freed_blocks) != -1)
+  {
+    int_to_name(i, (char *) &filename);
+    remove((char*)&filename);
+    next_alloc -= 1;
+    i = next_alloc -1;
+  }
+  return 0;
+}
+
+int free_block(int blockNum)
+{
+  int retval;
+  char filename[NAME_MAX];
+
+  int_to_name(blockNum, (char *) &filename);
+  remove((char*)&filename);
+  if (blockNum == (next_alloc - 1))
+  {
+    next_alloc -= 1;
+    retval = 0;
+  }
+  else
+  {
+    retval = queue_push(blockNum, &freed_blocks);
+  }
+  free_cleanup();
+  return retval;
+}
+
+
+
+static int basic_test()
+{
+  char write_buffer[BLOCKSIZE];
+  char read_buffer[BLOCKSIZE];
+  int block_to_test;
+  memset((char *)&write_buffer, 'a', BLOCKSIZE);
+  block_to_test = allocate_block();
+  if (block_to_test == -1)
+  {
+    printf("\tERROR allocating block\n");
+    return -1;
+  }
+  if (write_block(block_to_test, (char *) &write_buffer) == -1)
+  {
+    printf("\tERROR writing block\n");
+    return -1;
+  }
+  if (read_block(block_to_test, (char *) &read_buffer) == -1)
+  {
+    printf("\tERROR reading block\n");
+    return -1;
+  }
+#if WORKTEST
+  if (memcmp(read_buffer, write_buffer, BLOCKSIZE) != 0)
+  {
+    printf("\tERROR reading produced different bytes than those writen\n");
+    return -1;
+  }
+#endif
+  if(free_block(block_to_test) == -1)
+  {
+    printf("\tERROR freeing block\n");
+    return -1;
+  }
+  return 0;
+}
+static int better_test()
+{
+  int first;
+  int second;
+  int third;
+  first = allocate_block();
+  second = allocate_block();
+  third = allocate_block();
+
+  if(queue_size(&freed_blocks) != 0)
+  {
+    printf("\tERROR freelist not empty at start\n");
+    return -1;
+  }
+  if (free_block(first) == -1)
+  {
+    printf("\tERROR freeing first block\n");
+    return -1;
+  }
+
+  if(queue_size(&freed_blocks) != 1)
+  {
+    printf("\tERROR freelist not equal to one\n");
+    return -1;
+  }
+  if (free_block(second) == -1)
+  {
+    printf("\tERROR freeing second block\n");
+    return -1;
+  }
+
+  if(queue_size(&freed_blocks) != 2)
+  {
+    printf("\tERROR freelist not equal to two\n");
+    return -1;
+  }
+  if (free_block(third) == -1)
+  {
+    printf("\tERROR freeing third block\n");
+    return -1;
+  }
+
+  if(queue_size(&freed_blocks) != 0)
+  {
+    printf("\tERROR freelist cleanup failed\n");
+    return -1;
+  }
+
+  return 0;
+}
+static int far_test()
+{
+  int blocks[30];
+  int i;
+  char buf[BLOCKSIZE];
+  char read[BLOCKSIZE];
+  memset((char *)&buf, 'a', BLOCKSIZE);
+
+  for (i = 0; i < 30; i++)
+  {
+    blocks[i] = allocate_block();
+    if (blocks[i] == -1)
+    {
+      printf("\tERROR getting block %d\n", i);
+      return -1;
+    }
+  }
+  if(write_block(blocks[29], buf) == -1)
+  {
+    printf("\tERROR writing far block\n");
+    return -1;
+  }
+  if(read_block(blocks[29],(char*)&read) == -1)
+  {
+    printf("\tERROR reading far block\n");
+    return -1;
+  }
+#if WORKTEST
+  if (memcmp(read, buf, BLOCKSIZE) != 0)
+  {
+    printf("\tERROR read and write wrong\n");
+    return -1;
+  }
+#endif
+  for (i = 29; i >= 0; i--)
+  {
+    free_block(blocks[i]);
+  }
+  return 0;
+}
+static int queue_test()
+{
+  int blocks[30];
+  int i;
+  char buf[BLOCKSIZE];
+  char read[BLOCKSIZE];
+  memset((char *)&buf, 'a', BLOCKSIZE);
+
+  for (i = 0; i < 30; i++)
+  {
+    blocks[i] = allocate_block();
+    if (blocks[i] == -1)
+    {
+      printf("\tERROR getting block %d\n", i);
+      return -1;
+    }
+  }
+  if(write_block(blocks[29], buf) == -1)
+  {
+    printf("\tERROR writing far block\n");
+    return -1;
+  }
+  if(read_block(blocks[29],(char*)&read) == -1)
+  {
+    printf("\tERROR reading far block\n");
+    return -1;
+  }
+#if WORKTEST
+  if (memcmp(read, buf, BLOCKSIZE) != 0)
+  {
+    printf("\tERROR read and write wrong\n");
+    return -1;
+  }
+#endif
+  for (i = 0; i < 30; i++)
+  {
+    free_block(blocks[i]);
+  }
+  return 0;
+}
+static int run_tests()
+{
+  if (basic_test() == -1)
+  {
+    printf("error in basic_test\n");
+    return -1;
+  }
+  if (better_test() == -1)
+  {
+    printf("error in advanced tests\n");
+    return -1;
+  }
+  if (far_test() == -1)
+  {
+    printf("error in far test\n");
+    return -1;
+  }
+  if (queue_test() == -1)
+  {
+    printf("error in queue test\n");
+    return -1;
+  }
+  return 0;
+}
+
 #endif
 
 #if TEST /* include main for running some tests */
@@ -623,6 +974,7 @@ int main(int argc, const char* argv[])
     return -1;
 
   printf("SURVIVED TESTS!\n");
+  block_dev_destroy();
   return 0;
 }
 

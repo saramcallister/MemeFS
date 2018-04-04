@@ -20,8 +20,9 @@ jsteg.h: jsteg.a
 	  $(MAKE) $(AM_MAKEFLAGS) jsteg.a; \
 	fi
 
-blocklayer.o: blocklayer.c $(DEPS) queue.c queue_desc.c
+blocklayer.o: blocklayer.c $(DEPS) queue.c queue_desc.c memedl.c
 	$(CC) -c -o $@ $< $(CFLAGS) $(PKGFLAGS)
+
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS) $(PKGFLAGS)
