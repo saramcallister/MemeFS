@@ -152,3 +152,36 @@ int queue_remove(int data, queue *q)
   }
   return -1;
 }
+
+int queue_save(int *buffer, queue *q)
+{
+  int size;
+  int i;
+  queue_entry *ptr;
+  size = (q->size);
+  ptr = q->head;
+  buffer[0] = size;
+  for (i = 0; i < size; i++)
+  {
+    buffer[i+1] = ptr->data;
+    ptr = ptr->next;
+
+  }
+  return size;
+
+}
+
+int queue_load(int *buffer, queue *q)
+{
+
+  int size;
+  int i;
+
+  size = buffer[0];
+  for (i = 0; i < size; i ++)
+  {
+    queue_push(buffer[i+1], q);
+  }
+
+  return size;
+}
