@@ -92,6 +92,8 @@ void *meme_init(struct fuse_conn_info *conn)
 	inode root_inode;
 	dir_entry default_files;
 
+	(void) conn;
+
 	/* Initialize block layer */
 	block_dev_init(current_path);
 
@@ -137,6 +139,8 @@ void *meme_init(struct fuse_conn_info *conn)
 
 void meme_destroy(void *private_data) {
 	char buf[BLOCKSIZE];
+
+	(void) private_data;
 
 	write_block(superblock.inode_block, (char *) inode_table);
 	memcpy(buf, &superblock, sizeof(superblock));
@@ -227,32 +231,49 @@ static int meme_readlink(const char *path, char *buf, size_t size)
 static int meme_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		       off_t offset, struct fuse_file_info *fi)
 {
-	DIR *dp;
-	struct dirent *de;
+	size_t direct_block_num = 0;
+	int dir_inode_loc;
+	inode dir_inode;
+	dir_entry file_buf[BLOCKSIZE/sizeof(dir_entry)];
+	size_t size_checked = 0;
+	inode file_inode;
+	size_t i;
 
 	(void) offset;
 	(void) fi;
 
-	dp = opendir(path);
-	if (dp == NULL)
-		return -errno;
+	dir_inode_loc = find_inode_loc(path);
+	if(dir_inode_loc == -1)
+		return -ENOENT;
+	dir_inode = inode_table[dir_inode_loc];
 
-	while ((de = readdir(dp)) != NULL) {
-		struct stat st;
-		memset(&st, 0, sizeof(st));
-		st.st_ino = de->d_ino;
-		st.st_mode = de->d_type << 12;
-		if (filler(buf, de->d_name, &st, 0))
-			break;
+
+	for (direct_block_num = 0; direct_block_num < NUM_DIRECT_BLOCKS; 
+	  ++direct_block_num) {
+		read_block(dir_inode.data.direct[direct_block_num], (char*) file_buf);
+	  	for (i = 0; i < (int) dir_inode.size/sizeof(dir_entry); ++i) {
+			if (i*sizeof(dir_entry) + size_checked > dir_inode.size) {
+				return 0;
+			}
+			struct stat st;
+			memset(&st, 0, sizeof(st));
+			file_inode = inode_table[file_buf[i].inode_number];
+			st.st_mode = file_inode.mode;
+			if (filler(buf, file_buf[i].name, &st, 0))
+				break;
+		}
+		size_checked = size_checked + BLOCKSIZE;
 	}
+	/*TODO: Handle indirect blocks*/
 
-	closedir(dp);
 	return 0;
 }
 
 static int meme_mknod(const char *path, mode_t mode, dev_t rdev)
 {
 	int res;
+	fprintf(stderr, "meme_mknod was called");
+	return -ENOSYS;
 
 	/* On Linux this could just be 'mknod(path, mode, rdev)' but this
 	   is more portable */
@@ -274,6 +295,8 @@ static int meme_mkdir(const char *path, mode_t mode)
 {
 	int res;
 
+	fprintf(stderr, "meme_mkdir was called");
+	return -ENOSYS;
 	res = mkdir(path, mode);
 	if (res == -1)
 		return -errno;
@@ -284,6 +307,8 @@ static int meme_mkdir(const char *path, mode_t mode)
 static int meme_unlink(const char *path)
 {
 	int res;
+	fprintf(stderr, "meme_unlink was called");
+	return -ENOSYS;
 
 	res = unlink(path);
 	if (res == -1)
@@ -296,6 +321,8 @@ static int meme_rmdir(const char *path)
 {
 	int res;
 
+	fprintf(stderr, "meme_rmdir was called");
+	return -ENOSYS;
 	res = rmdir(path);
 	if (res == -1)
 		return -errno;
@@ -307,6 +334,8 @@ static int meme_symlink(const char *to, const char *from)
 {
 	int res;
 
+	fprintf(stderr, "meme_symlink was called");
+	return -ENOSYS;
 	res = symlink(to, from);
 	if (res == -1)
 		return -errno;
@@ -318,6 +347,8 @@ static int meme_rename(const char *from, const char *to)
 {
 	int res;
 
+	fprintf(stderr, "meme_rename was called");
+	return -ENOSYS;
 	res = rename(from, to);
 	if (res == -1)
 		return -errno;
@@ -329,6 +360,8 @@ static int meme_link(const char *from, const char *to)
 {
 	int res;
 
+	fprintf(stderr, "meme_link was called");
+	return -ENOSYS;
 	res = link(from, to);
 	if (res == -1)
 		return -errno;
@@ -340,6 +373,8 @@ static int meme_chmod(const char *path, mode_t mode)
 {
 	int res;
 
+	fprintf(stderr, "meme_chmod was called");
+	return -ENOSYS;
 	res = chmod(path, mode);
 	if (res == -1)
 		return -errno;
@@ -351,6 +386,8 @@ static int meme_chown(const char *path, uid_t uid, gid_t gid)
 {
 	int res;
 
+	fprintf(stderr, "meme_chown was called");
+	return -ENOSYS;
 	res = lchown(path, uid, gid);
 	if (res == -1)
 		return -errno;
@@ -362,6 +399,8 @@ static int meme_truncate(const char *path, off_t size)
 {
 	int res;
 
+	fprintf(stderr, "meme_truncate was called");
+	return -ENOSYS;
 	res = truncate(path, size);
 	if (res == -1)
 		return -errno;
@@ -374,6 +413,8 @@ static int meme_utimens(const char *path, const struct timespec ts[2])
 	int res;
 	struct timeval tv[2];
 
+	fprintf(stderr, "meme_utimens was called");
+	return -ENOSYS;
 	tv[0].tv_sec = ts[0].tv_sec;
 	tv[0].tv_usec = ts[0].tv_nsec / 1000;
 	tv[1].tv_sec = ts[1].tv_sec;
@@ -390,6 +431,8 @@ static int meme_open(const char *path, struct fuse_file_info *fi)
 {
 	int res;
 
+	fprintf(stderr, "meme_open was called");
+	return -ENOSYS;
 	res = open(path, fi->flags);
 	if (res == -1)
 		return -errno;
@@ -404,6 +447,8 @@ static int meme_read(const char *path, char *buf, size_t size, off_t offset,
 	int fd;
 	int res;
 
+	fprintf(stderr, "meme_read was called");
+	return -ENOSYS;
 	(void) fi;
 	fd = open(path, O_RDONLY);
 	if (fd == -1)
@@ -423,6 +468,8 @@ static int meme_write(const char *path, const char *buf, size_t size,
 	int fd;
 	int res;
 
+	fprintf(stderr, "meme_write was called");
+	return -ENOSYS;
 	(void) fi;
 	fd = open(path, O_WRONLY);
 	if (fd == -1)
@@ -440,6 +487,8 @@ static int meme_statfs(const char *path, struct statvfs *stbuf)
 {
 	int res;
 
+	fprintf(stderr, "meme_statfs was called");
+	return -ENOSYS;
 	res = statvfs(path, stbuf);
 	if (res == -1)
 		return -errno;
@@ -452,6 +501,8 @@ static int meme_release(const char *path, struct fuse_file_info *fi)
 	/* Just a stub.	 This method is optional and can safely be left
 	   unimplemented */
 
+	fprintf(stderr, "meme_release was called");
+	return -ENOSYS;
 	(void) path;
 	(void) fi;
 	return 0;
@@ -463,6 +514,8 @@ static int meme_fsync(const char *path, int isdatasync,
 	/* Just a stub.	 This method is optional and can safely be left
 	   unimplemented */
 
+	fprintf(stderr, "meme_fsync was called");
+	return -ENOSYS;
 	(void) path;
 	(void) isdatasync;
 	(void) fi;

@@ -1,0 +1,3 @@
+[submodule "jsteg"]
+	path = jsteg
+	url = https://github.com/g-rocket/jsteg

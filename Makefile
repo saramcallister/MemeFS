@@ -1,24 +1,24 @@
-C=gcc
+CC=gcc
 CFLAGS = -g -Og -Wall -Wextra
 PKGFLAGS = `pkg-config fuse --cflags --libs` -lcurl
-DEPS = blocklayer.h #jsteg.h
+DEPS = blocklayer.h jsteg.h
 OBJ = memefs.o blocklayer.o
 
-#_GOFILES = main.go reader.go writer.go scan.go huffman.go fdct.go
-#GOFILES = $(patsubst %,jsteg/%,$(_GOFILES))
+_GOFILES = main.go reader.go writer.go scan.go huffman.go fdct.go
+GOFILES = $(patsubst %,jsteg/%,$(_GOFILES))
 
-memefs: $(OBJ) #jsteg.a
+memefs: $(OBJ) jsteg.a
 	gcc -pthread -o $@ $^ $(CFLAGS) $(PKGFLAGS)
 
-# jsteg.a: $(GOFILES)
-#	go build -buildmode=c-archive -o jsteg.a $(GOFILES)
+jsteg.a: $(GOFILES)
+	go build -buildmode=c-archive -o jsteg.a $(GOFILES)
 
-#jsteg.h: jsteg.a
-### Recover from the removal of $@
-#	@if test -f $@; then :; else \
-#  	  rm -f jsteg.a; \
-#	  $(MAKE) $(AM_MAKEFLAGS) jsteg.a; \
-##	fi
+jsteg.h: jsteg.a
+## Recover from the removal of $@
+	@if test -f $@; then :; else \
+	  rm -f jsteg.a; \
+	  $(MAKE) $(AM_MAKEFLAGS) jsteg.a; \
+	fi
 
 blocklayer.o: blocklayer.c $(DEPS) queue.c queue_desc.c
 	$(CC) -c -o $@ $< $(CFLAGS) $(PKGFLAGS)
