@@ -56,22 +56,83 @@
 #if VERSION == 0
 #define BIGFILENAME "temp_blockdev" /* only used in version 0 */
 #define BIGFILEMODE 0000666
+#define METABLOCKS 1
 
 /* bigfile version globals */
 int bigfile;
 queue freed_blocks;
 int next_alloc;
 char *path;
+static int save_state()
+{
+  int size;
+  int buffersize;
+  int i;
+  int written;
+  int *buff;
+  printf("Here's a save_state!\n");
+  size = freed_blocks.size;
+  buffersize = (size + 2) * sizeof(int);
+  if (buffersize > BLOCKSIZE)
+  {
+    printf("ERROR, DATA STRUCTURE LARGER THAN BLOCKSIZE\n");
+    return -1;
+  }
+  buff = malloc(buffersize);
+  buff[0] = next_alloc;
+  queue_save(buff+1, &freed_blocks);
+  real_goto_block(0);
+  written = write(bigfile, buff, BLOCKSIZE);
+  if (written < 0)
+  {
+    return -1;
+  }
+  printf("Wrote %d bytes\n", written);
+  free(buff);
+  return 0;
+}
+static int load_state()
+{
+  char rbuff[BLOCKSIZE];
+  int *buff;
+  int ret;
+  int size;
+  buff = (int*) &rbuff;
+  printf("Here's a load_state\n");
+  real_goto_block(0);
+  ret = read(bigfile, buff, BLOCKSIZE);
+  next_alloc = buff[0];
+  size = buff[1];
+  if (ret < 0)
+    return -1;
+  freed_blocks = new_queue();
+  queue_load(buff+1, &freed_blocks);
+  printf("Expected %d got %d\n", size, freed_blocks.size);
+  if (freed_blocks.size != size)
+    return -1;
+  return 0;
+}
 static int init()
 {
   char buffer[PATH_MAX] = {0};
   strcpy((char *)&buffer, path);
   strcat((char *)&buffer, BIGFILENAME);
-  bigfile = open((char *)&buffer, O_RDWR|O_CREAT, BIGFILEMODE);
+  bigfile = open((char *)&buffer, O_RDWR|O_CREAT|O_EXCL, BIGFILEMODE);
   if (bigfile < 0)
   {
-    printf("Couldn't open file");
-    return -1;
+    printf("File Exists! (probably)\n");
+    bigfile = open((char *)&buffer, O_RDWR, BIGFILEMODE);
+    if (bigfile < 0)
+    {
+      printf("Ok no just an error oppening file\n");
+      return -1;
+    }
+    if (load_state() < 0)
+    {
+      printf("Error loading previous state\n");
+      return -1;
+    }
+    return 0;
   }
   freed_blocks = new_queue();
   next_alloc = 0;
@@ -79,21 +140,31 @@ static int init()
 }
 static int destroy()
 {
+  int ret = 0;
+  if (save_state() < 0)
+  {
+    printf("Saving state failed\n");
+    ret = -1;
+  }
   close(bigfile);
   while (queue_size(&freed_blocks) > 0)
   {
     queue_pop(&freed_blocks);
   }
-  return 0;
+  return ret;
 }
-static int goto_block(int blockNum)
+static int real_goto_block(int blockNum)
 {
-  if(lseek(bigfile, blockNum * BLOCKSIZE, SEEK_SET) < 0)
+  if(lseek(bigfile, (blockNum) * BLOCKSIZE, SEEK_SET) < 0)
   {
     printf("Error Seeking File\n");
     return -1;
   }
   return 0;
+}
+static int goto_block(int blockNum)
+{
+  return real_goto_block(blockNum + METABLOCKS);
 }
 int block_dev_init(char *cwd)
 {
@@ -121,6 +192,11 @@ int read_block(int blockNum, char *buf)
 }
 int write_block(int blockNum, const char *buf)
 {
+  if (blockNum >= next_alloc)
+  {
+    /* I'm being asked about a block you definetly havent alloced yet */
+    return -1;
+  }
   goto_block(blockNum);
   if (write(bigfile, buf, BLOCKSIZE) < 0)
   {
