@@ -11,12 +11,12 @@
 
 #define TESTPATH "/home/meow/Documents/MemeFS/"
 
-#define VERSION 1
+#define VERSION 0
       /*  - 0 just use a big file
           - 1 use text files
           - 2 actually use images */
 
-#define QUETYPE 1
+#define QUETYPE 0
       /*  - 0 unordered
           - 1 ordered descending */
 
@@ -40,8 +40,9 @@
 
 #define TEST 0
 
-#define WORKTEST 0
+#define WORKTEST 1
 
+#define TESTLOAD 1
 
 #if QUETYPE == 0
 #include "queue.c"
@@ -63,11 +64,19 @@ int bigfile;
 queue freed_blocks;
 int next_alloc;
 char *path;
+static int real_goto_block(int blockNum)
+{
+  if(lseek(bigfile, (blockNum) * BLOCKSIZE, SEEK_SET) < 0)
+  {
+    printf("Error Seeking File\n");
+    return -1;
+  }
+  return 0;
+}
 static int save_state()
 {
   int size;
   int buffersize;
-  int i;
   int written;
   int *buff;
   printf("Here's a save_state!\n");
@@ -96,18 +105,18 @@ static int load_state()
   char rbuff[BLOCKSIZE];
   int *buff;
   int ret;
-  int size;
+  size_t size;
   buff = (int*) &rbuff;
   printf("Here's a load_state\n");
   real_goto_block(0);
   ret = read(bigfile, buff, BLOCKSIZE);
   next_alloc = buff[0];
-  size = buff[1];
+  size = (size_t)buff[1];
   if (ret < 0)
     return -1;
   freed_blocks = new_queue();
   queue_load(buff+1, &freed_blocks);
-  printf("Expected %d got %d\n", size, freed_blocks.size);
+  printf("Expected %ld got %ld\n", size, freed_blocks.size);
   if (freed_blocks.size != size)
     return -1;
   return 0;
@@ -152,15 +161,6 @@ static int destroy()
     queue_pop(&freed_blocks);
   }
   return ret;
-}
-static int real_goto_block(int blockNum)
-{
-  if(lseek(bigfile, (blockNum) * BLOCKSIZE, SEEK_SET) < 0)
-  {
-    printf("Error Seeking File\n");
-    return -1;
-  }
-  return 0;
 }
 static int goto_block(int blockNum)
 {
@@ -371,6 +371,37 @@ static int far_test()
 }
 static int run_tests()
 {
+#if TESTLOAD
+  int i;
+  int tm;
+  printf("PRINTING DIAGNOSTICS\n");
+  printf("\tnext_alloc: %d\n\tfreed_blocks.size: %ld\n", next_alloc, freed_blocks.size);
+
+  for (i = 0; i < 30; i++)
+  {
+    tm = allocate_block();
+    printf("allocated block %d\n", tm);
+    if (tm == -1)
+    {
+      printf("\tERROR getting block %d\n", i);
+      return -1;
+    }
+  }
+  for (i = 0; i < 29; i++)
+  {
+    tm = free_block(i);
+    printf("freed_block block %d\n", i);
+    if (tm == -1)
+    {
+      printf("\tERROR freeing block %d\n", i);
+      return -1;
+    }
+  }
+  printf("PRINTING DIAGNOSTICS\n");
+  printf("\tnext_alloc: %d\n\tfreed_blocks.size: %ld\n", next_alloc, freed_blocks.size);
+
+  return 0;
+#else
   if (basic_test() == -1)
   {
     printf("error in basic_test\n");
@@ -387,6 +418,7 @@ static int run_tests()
     return -1;
   }
   return 0;
+#endif
 }
 
 
