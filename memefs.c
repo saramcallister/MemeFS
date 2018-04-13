@@ -94,6 +94,8 @@ void *meme_init(struct fuse_conn_info *conn)
 
 	(void) conn;
 
+	printf("********Current path is %s.*********\n", current_path);
+
 	/* Initialize block layer */
 	block_dev_init(current_path);
 
@@ -165,11 +167,13 @@ int find_inode_loc(const char *path)
 	strcpy(path_copy, path);
 
 	token = strtok(path_copy, "/");
+	printf("token is %s\n", token);
 	while (token) {
 		num_entries = inode_table[inode_loc].size / sizeof(dir_entry);
 		// TODO: modify to work with more than 1 block's worth of dir_entries
 		read_block(inode_table[inode_loc].data.direct[1], (char *) buf); 
 		for (i = 0; i < num_entries; i++) {
+			printf("buf[i].name is %s\n", buf[i].name);
 			if (!strcmp(buf[i].name, token)) {
 				break;
 			} else if (i == num_entries - 1) {
@@ -180,16 +184,20 @@ int find_inode_loc(const char *path)
 		inode_loc = buf[i].inode_number;
 		token = strtok(NULL, "/");
 	}
-
+	
+	printf("inode_loc is %d\n", inode_loc);
 	return inode_loc;
 }
 
 static int meme_getattr(const char *path, struct stat *stbuf)
 {
 	int res = 0;
+
+	printf("Path in getattr is %s\n", path);
 	
 	res = find_inode_loc(path);
 	if (strcmp(path, "/") == 0) {
+		printf("In if of getattr.\n");
 		stbuf->st_mode = superblock.root_inode.mode;
 		stbuf->st_nlink = 2;
 	} else if (res == -1) {
@@ -242,14 +250,18 @@ static int meme_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	(void) offset;
 	(void) fi;
 
+	printf("Path is %s\n", path);
+
 	dir_inode_loc = find_inode_loc(path);
 	if(dir_inode_loc == -1)
 		return -ENOENT;
 	dir_inode = inode_table[dir_inode_loc];
+	printf("dir_inode num %d\n", dir_inode_loc); 
 
 
 	for (direct_block_num = 0; direct_block_num < NUM_DIRECT_BLOCKS; 
 	  ++direct_block_num) {
+	  	printf("In outer for loop\n");
 		read_block(dir_inode.data.direct[direct_block_num], (char*) file_buf);
 	  	for (i = 0; i < (int) dir_inode.size/sizeof(dir_entry); ++i) {
 			if (i*sizeof(dir_entry) + size_checked > dir_inode.size) {
@@ -259,12 +271,19 @@ static int meme_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			memset(&st, 0, sizeof(st));
 			file_inode = inode_table[file_buf[i].inode_number];
 			st.st_mode = file_inode.mode;
+			printf("file name %s\n", file_buf[i].name);
 			if (filler(buf, file_buf[i].name, &st, 0))
 				break;
 		}
 		size_checked = size_checked + BLOCKSIZE;
+		printf("size_checked: %d, dir_inode.size: %d\n", size_checked, dir_inode.size);
+		if (size_checked >= dir_inode.size) {
+			printf("break.\n");
+			break;
+		}
 	}
 	/*TODO: Handle indirect blocks*/
+	printf("exiting function\n");
 
 	return 0;
 }
@@ -560,6 +579,8 @@ static int meme_removexattr(const char *path, const char *name)
 #endif /* HAVE_SETXATTR */
 
 static struct fuse_operations meme_oper = {
+	.init		= meme_init,
+	.destroy	= meme_destroy,
 	.getattr	= meme_getattr,
 	.access		= meme_access,
 	.readlink	= meme_readlink,
