@@ -390,7 +390,7 @@ static int run_tests()
   for (i = 0; i < 29; i++)
   {
     tm = free_block(i);
-    printf("freed_block block %d\n", i);
+    printf("freed block %d\n", i);
     if (tm == -1)
     {
       printf("\tERROR freeing block %d\n", i);
@@ -425,33 +425,80 @@ static int run_tests()
 #elif VERSION == 1
 /* many files version */
 #define EXTENTION ".txt"
+#define METANAME "meta.txt"
 /* globals */
 queue freed_blocks;
 int next_alloc;
 char *path;
-
+static int int_to_name(int val, char *name)
+{
+  char buffer[NAME_MAX] = {0};
+  if (val == -1)
+  {
+    strcpy(name, METANAME);
+    return 0;
+  }
+  snprintf((char *)&buffer, NAME_MAX, "%d%s", val, EXTENTION);
+  strcpy(name, path);
+  strcat(name, (char*)&buffer);
+  return 0;
+}
+static int save_state()
+{
+  char rbuff[BLOCKSIZE] = {0};
+  int *buff;
+  int size;
+  printf("Saving state\n");
+  buff = (int*)&rbuff;
+  buff[0] = next_alloc;
+  printf("saved next_alloc: %d\n", buff[0]);
+  queue_save(buff+1, &freed_blocks);
+  printf("saved size: %d\n", buff[1]);
+  write_block(-1, (char*)&rbuff);
+  read_block(-1, (char*)&rbuff);
+  buff = (int*)&rbuff;
+  printf("Proof: %d | %d\n", buff[0], buff[1]);
+  return 0;
+}
+static int load_state()
+{
+  char rbuff[BLOCKSIZE] = {0};
+  int *buff;
+  int size;
+  printf("Attempting load\n");
+  read_block(-1, (char*)&rbuff);
+  buff = (int*)&rbuff;
+  next_alloc = buff[0];
+  size = buff[1];
+  freed_blocks = new_queue();
+  printf("next_alloc: %d, size %d\n",next_alloc, size);
+  queue_load(buff+1, &freed_blocks);
+  return 0;
+}
 int block_dev_init(char *cwd)
 {
+  int metafile;
+  char name[NAME_MAX];
   path = strdup(cwd);
+  int_to_name(-1, (char*)&name);
+  metafile = open((char*)name, O_RDWR|O_CREAT|O_EXCL, FILEMODE);
+  if (metafile < 1)
+  {
+    printf("FILE EXISTS!\n");
+    close(metafile);
+    load_state();
+    return 0;
+  }
+  close(metafile);
   freed_blocks = new_queue();
   next_alloc = 0;
   return 0;
 }
 int block_dev_destroy()
 {
-  while (queue_size(&freed_blocks) > 0)
-  {
-    queue_pop(&freed_blocks);
-  }
+  save_state();
+  queue_destroy(&freed_blocks);
   free(path);
-  return 0;
-}
-static int int_to_name(int val, char *name)
-{
-  char buffer[NAME_MAX] = {0};
-  snprintf((char *)&buffer, NAME_MAX, "%d%s", val, EXTENTION);
-  strcpy(name, path);
-  strcat(name, (char*)&buffer);
   return 0;
 }
 int read_block(int blockNum, char *buf)
@@ -710,6 +757,38 @@ static int queue_test()
 }
 static int run_tests()
 {
+
+#if TESTLOAD
+  int i;
+  int tm;
+  printf("PRINTING DIAGNOSTICS\n");
+  printf("\tnext_alloc: %d\n\tfreed_blocks.size: %ld\n", next_alloc, freed_blocks.size);
+
+  for (i = 0; i < 30; i++)
+  {
+    tm = allocate_block();
+    printf("allocated block %d\n", tm);
+    if (tm == -1)
+    {
+      printf("\tERROR getting block %d\n", i);
+      return -1;
+    }
+  }
+  for (i = 0; i < 29; i++)
+  {
+    tm = free_block(i);
+    printf("freed block %d\n", i);
+    if (tm == -1)
+    {
+      printf("\tERROR freeing block %d\n", i);
+      return -1;
+    }
+  }
+  printf("PRINTING DIAGNOSTICS\n");
+  printf("\tnext_alloc: %d\n\tfreed_blocks.size: %ld\n", next_alloc, freed_blocks.size);
+
+  return 0;
+#else
   if (basic_test() == -1)
   {
     printf("error in basic_test\n");
@@ -731,6 +810,7 @@ static int run_tests()
     return -1;
   }
   return 0;
+#endif
 }
 
 #else
