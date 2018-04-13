@@ -2,7 +2,7 @@ CC=gcc
 CFLAGS = -g -Og -Wall -Wextra
 PKGFLAGS = `pkg-config fuse --cflags --libs` -lcurl
 DEPS = blocklayer.h jsteg.h
-OBJ = memefs.o blocklayer.o
+OBJ = blocklayer.o fatfs.o
 
 _GOFILES = main.go reader.go writer.go scan.go huffman.go fdct.go
 GOFILES = $(patsubst %,jsteg/%,$(_GOFILES))
