@@ -820,6 +820,7 @@ static int run_tests()
 /* TODO support directory stuffs */
 #include "memedl.c"
 #define EXTENTION ".jpg"
+#define METANAME "meta.jpg"
 
 /* globals */
 queue freed_blocks;
@@ -836,22 +837,74 @@ static int new_meme(char *path)
 static int int_to_name(int val, char *name)
 {
   char buffer[NAME_MAX] = {0};
+  if (val == -1)
+  {
+    strcpy(name, METANAME);
+    return 0;
+  }
   snprintf((char *)&buffer, NAME_MAX, "%d%s", val, EXTENTION);
   strcpy(name, path);
   strcat(name, (char*)&buffer);
   return 0;
 }
+
+static int save_state()
+{
+  char rbuff[BLOCKSIZE] = {0};
+  int *buff;
+  int size;
+  printf("Saving state\n");
+  buff = (int*)&rbuff;
+  buff[0] = next_alloc;
+  printf("saved next_alloc: %d\n", buff[0]);
+  queue_save(buff+1, &freed_blocks);
+  printf("saved size: %d\n", buff[1]);
+  write_block(-1, (char*)&rbuff);
+  read_block(-1, (char*)&rbuff);
+  buff = (int*)&rbuff;
+  printf("Proof: %d | %d\n", buff[0], buff[1]);
+  return 0;
+}
+static int load_state()
+{
+  char rbuff[BLOCKSIZE] = {0};
+  int *buff;
+  int size;
+  printf("Attempting load\n");
+  read_block(-1, (char*)&rbuff);
+  buff = (int*)&rbuff;
+  next_alloc = buff[0];
+  size = buff[1];
+  freed_blocks = new_queue();
+  printf("next_alloc: %d, size %d\n",next_alloc, size);
+  queue_load(buff+1, &freed_blocks);
+  return 0;
+}
+/* TODO update init and destroy to use load and save */
 int block_dev_init(char *cwd)
 {
+  int metafile;
+  char name[NAME_MAX];
   memedl_init();
+  path = strdup(cwd);
+  int_to_name(-1,(char*)&name);
+  metafile = open((char*)&name, O_RDWR|O_CREAT|O_EXCL, FILEMODE);
+  if (metafile < 1)
+  {
+    printf("FILE EXISTS!\n");
+    close(metafile);
+    load_state();
+    return 0;
+  }
+  close(metafile);
   freed_blocks = new_queue();
   next_alloc = 0;
-  path = strdup(cwd);
   return 0;
 }
 int block_dev_destroy()
 {
   memedl_destroy();
+  save_state();
   queue_destroy(&freed_blocks);
   free(path);
   return 0;
