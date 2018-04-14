@@ -16,7 +16,7 @@
           - 1 use text files
           - 2 actually use images */
 
-#define QUETYPE 0
+#define QUETYPE 1
       /*  - 0 unordered
           - 1 ordered descending */
 
@@ -68,7 +68,7 @@ static int real_goto_block(int blockNum)
 {
   if(lseek(bigfile, (blockNum) * BLOCKSIZE, SEEK_SET) < 0)
   {
-    printf("Error Seeking File\n");
+    printf("\tError Seeking File\n");
     return -1;
   }
   return 0;
@@ -79,12 +79,11 @@ static int save_state()
   int buffersize;
   int written;
   int *buff;
-  printf("Here's a save_state!\n");
   size = freed_blocks.size;
   buffersize = (size + 2) * sizeof(int);
   if (buffersize > BLOCKSIZE)
   {
-    printf("ERROR, DATA STRUCTURE LARGER THAN BLOCKSIZE\n");
+    printf("\tERROR, DATA STRUCTURE LARGER THAN BLOCKSIZE\n");
     return -1;
   }
   buff = malloc(buffersize);
@@ -96,7 +95,6 @@ static int save_state()
   {
     return -1;
   }
-  printf("Wrote %d bytes\n", written);
   free(buff);
   return 0;
 }
@@ -107,7 +105,6 @@ static int load_state()
   int ret;
   size_t size;
   buff = (int*) &rbuff;
-  printf("Here's a load_state\n");
   real_goto_block(0);
   ret = read(bigfile, buff, BLOCKSIZE);
   next_alloc = buff[0];
@@ -116,7 +113,6 @@ static int load_state()
     return -1;
   freed_blocks = new_queue();
   queue_load(buff+1, &freed_blocks);
-  printf("Expected %ld got %ld\n", size, freed_blocks.size);
   if (freed_blocks.size != size)
     return -1;
   return 0;
@@ -129,16 +125,15 @@ static int init()
   bigfile = open((char *)&buffer, O_RDWR|O_CREAT|O_EXCL, BIGFILEMODE);
   if (bigfile < 0)
   {
-    printf("File Exists! (probably)\n");
     bigfile = open((char *)&buffer, O_RDWR, BIGFILEMODE);
     if (bigfile < 0)
     {
-      printf("Ok no just an error oppening file\n");
+      printf("\tERROR creating bigfile\n");
       return -1;
     }
     if (load_state() < 0)
     {
-      printf("Error loading previous state\n");
+      printf("\tError loading previous state\n");
       return -1;
     }
     return 0;
@@ -152,7 +147,7 @@ static int destroy()
   int ret = 0;
   if (save_state() < 0)
   {
-    printf("Saving state failed\n");
+    printf("\tERROR Saving state failed\n");
     ret = -1;
   }
   close(bigfile);
@@ -246,6 +241,7 @@ int free_block(int blockNum)
     return retval;
   }
 }
+#if TEST
 static int basic_test()
 {
   char write_buffer[BLOCKSIZE];
@@ -420,7 +416,7 @@ static int run_tests()
   return 0;
 #endif
 }
-
+#endif
 
 #elif VERSION == 1
 /* many files version */
@@ -447,31 +443,22 @@ static int save_state()
 {
   char rbuff[BLOCKSIZE] = {0};
   int *buff;
-  int size;
-  printf("Saving state\n");
   buff = (int*)&rbuff;
   buff[0] = next_alloc;
-  printf("saved next_alloc: %d\n", buff[0]);
   queue_save(buff+1, &freed_blocks);
-  printf("saved size: %d\n", buff[1]);
   write_block(-1, (char*)&rbuff);
   read_block(-1, (char*)&rbuff);
   buff = (int*)&rbuff;
-  printf("Proof: %d | %d\n", buff[0], buff[1]);
   return 0;
 }
 static int load_state()
 {
   char rbuff[BLOCKSIZE] = {0};
   int *buff;
-  int size;
-  printf("Attempting load\n");
   read_block(-1, (char*)&rbuff);
   buff = (int*)&rbuff;
   next_alloc = buff[0];
-  size = buff[1];
   freed_blocks = new_queue();
-  printf("next_alloc: %d, size %d\n",next_alloc, size);
   queue_load(buff+1, &freed_blocks);
   return 0;
 }
@@ -484,7 +471,6 @@ int block_dev_init(char *cwd)
   metafile = open((char*)name, O_RDWR|O_CREAT|O_EXCL, FILEMODE);
   if (metafile < 1)
   {
-    printf("FILE EXISTS!\n");
     close(metafile);
     load_state();
     return 0;
@@ -579,7 +565,7 @@ int free_block(int blockNum)
   int retval;
   if (remove_file(blockNum) == -1)
   {
-    printf("ERROR removing\n");
+    printf("\tERROR removing file\n");
   }
   if (blockNum == (next_alloc - 1))
   {
@@ -594,6 +580,7 @@ int free_block(int blockNum)
     return retval;
   }
 }
+#if TEST
 static int basic_test()
 {
   char write_buffer[BLOCKSIZE];
@@ -812,6 +799,7 @@ static int run_tests()
   return 0;
 #endif
 }
+#endif
 
 #else
 /* images version */
@@ -853,16 +841,12 @@ static int save_state()
   char rbuff[BLOCKSIZE] = {0};
   int *buff;
   int size;
-  printf("Saving state\n");
   buff = (int*)&rbuff;
   buff[0] = next_alloc;
-  printf("saved next_alloc: %d\n", buff[0]);
   queue_save(buff+1, &freed_blocks);
-  printf("saved size: %d\n", buff[1]);
   write_block(-1, (char*)&rbuff);
   read_block(-1, (char*)&rbuff);
   buff = (int*)&rbuff;
-  printf("Proof: %d | %d\n", buff[0], buff[1]);
   return 0;
 }
 static int load_state()
@@ -870,13 +854,11 @@ static int load_state()
   char rbuff[BLOCKSIZE] = {0};
   int *buff;
   int size;
-  printf("Attempting load\n");
   read_block(-1, (char*)&rbuff);
   buff = (int*)&rbuff;
   next_alloc = buff[0];
   size = buff[1];
   freed_blocks = new_queue();
-  printf("next_alloc: %d, size %d\n",next_alloc, size);
   queue_load(buff+1, &freed_blocks);
   return 0;
 }
@@ -891,7 +873,6 @@ int block_dev_init(char *cwd)
   metafile = open((char*)&name, O_RDWR|O_CREAT|O_EXCL, FILEMODE);
   if (metafile < 1)
   {
-    printf("FILE EXISTS!\n");
     close(metafile);
     load_state();
     return 0;
@@ -1003,7 +984,7 @@ int free_block(int blockNum)
 }
 
 
-
+#if TEST
 static int basic_test()
 {
   char write_buffer[BLOCKSIZE];
@@ -1195,6 +1176,7 @@ static int run_tests()
   return 0;
 }
 
+#endif
 #endif
 
 #if TEST /* include main for running some tests */
