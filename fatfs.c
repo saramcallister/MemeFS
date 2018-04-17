@@ -96,7 +96,7 @@ static void read_block_fs(fat_ptr id, void *dest)
 	}
 	
 	ret = read_block(id, (char*) dest);
-	if (ret != BLOCK_SIZE) {
+	if (ret != 0) {
 		printf("error: did not read entire block");
 	}
 	printf("read_block_fs %x\n", id);
@@ -111,7 +111,7 @@ static void write_block_fs(fat_ptr id, void *data)
 	}
 	
 	ret = write_block(id, (char*) data);
-	if (ret != BLOCK_SIZE) {
+	if (ret != 0) {
 		printf("error: did not write entire block");
 	}
 	printf("write_block_fs %x\n", id);
@@ -122,7 +122,7 @@ static void read_superblock()
 	int ret;
 	
 	ret = read_block(0, (char*) &sb_data);
-	if (ret != BLOCK_SIZE) {
+	if (ret != 0) {
 		printf("error: did not read entire superblock");
 	}
 	printf("read_superblock 0: root = %x, free = %x\n",
@@ -134,7 +134,7 @@ static void write_superblock()
 	int ret;
 
 	ret = write_block(0, (char*) &sb_data);
-	if (ret != BLOCK_SIZE) {
+	if (ret != 0) {
 		printf("error: did not write entire superblock");
 	}
 	printf("write_superblock 0: root = %x, free = %x\n",
@@ -145,7 +145,7 @@ static void read_fat()
 {
 	int ret;
 	ret = read_block(1, (char*) &fat);
-	if (ret != BLOCK_SIZE) {
+	if (ret != 0) {
 		printf("error: did not read entire fat table");
 	}
 	printf("read_fat %x: [%x, %x, %x, %x, %x, %x, %x, %x, ...]\n", BLOCK_SIZE,
@@ -156,7 +156,7 @@ static void write_fat()
 {
 	int ret;
 	ret = write_block(1, (char*) &fat);
-	if (ret != BLOCK_SIZE) {
+	if (ret != 0) {
 		printf("error: did not write entire fat table");
 	}
 	printf("write_fat %x: [%x, %x, %x, %x, %x, %x, %x, %x, ...]\n", BLOCK_SIZE,
@@ -515,6 +515,8 @@ static int fatfs_mkdir(const char* path, mode_t mode)
 static void* fatfs_init(struct fuse_conn_info *conn)
 {
 	int ret;
+	printf("Current Path is %s\n", current_path);
+
 	ret = block_dev_init(current_path);
 	if (ret != 0) {
 		fprintf(stderr, "Block device did not initialize. Returned %d\n", ret);
