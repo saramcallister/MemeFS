@@ -132,7 +132,12 @@ static int goto_block(int blockNum)
 int block_dev_init(char *cwd)
 {
   char buffer[PATH_MAX] = {0};
-  path = strdup(cwd);
+  char temp[PATH_MAX];
+  strcpy((char*)&temp, cwd);
+  strcat((char*)&temp, "/");
+  path = strdup((char*)&temp);
+
+  printf("\t\tPATH: %s\n", path);
   strcpy((char *)&buffer, path);
   strcat((char *)&buffer, BIGFILENAME);
   bigfile = open((char *)&buffer, O_RDWR|O_CREAT|O_EXCL, BIGFILEMODE);
@@ -466,7 +471,11 @@ int block_dev_init(char *cwd)
 {
   int metafile;
   char name[NAME_MAX];
-  path = strdup(cwd);
+  char temp[PATH_MAX];
+  strcpy((char*)&temp, cwd);
+  strcat((char*)&temp, "/");
+  path = strdup((char*)&temp);
+  printf("\t\tPATH: %s\n", path);
   int_to_name(-1, (char*)&name);
   metafile = open((char*)name, O_RDWR|O_CREAT|O_EXCL, FILEMODE);
   if (metafile < 1)
@@ -867,8 +876,13 @@ int block_dev_init(char *cwd)
 {
   int metafile;
   char name[NAME_MAX];
+
+  char temp[PATH_MAX];
+  strcpy((char*)&temp, cwd);
+  strcat((char*)&temp, "/");
+  path = strdup((char*)&temp);
+
   memedl_init();
-  path = strdup(cwd);
   int_to_name(-1,(char*)&name);
   metafile = open((char*)&name, O_RDWR|O_CREAT|O_EXCL, FILEMODE);
   if (metafile < 1)
