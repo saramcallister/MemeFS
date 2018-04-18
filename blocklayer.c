@@ -1,4 +1,14 @@
 /* AUTHOR: M Jake Palanker */
+/* this is the implimentation of the blocklayer
+ * this code is broken up into several different parts
+ * each version has its own implimentation and the pre-processor
+ * will remove all but the selected version (see VERSION)
+ * preprocessor flags also allow this code to be compiled into a full executable
+ * enabling TEST will introduce a main() and several testing functions
+ * you can also change the queue type at compile time by changing QUETYPE
+ * Some of the compile time flags that are more likely to be changed when using
+ * the blocklayer are in the blocklayer.h file
+ */
 
 #include "blocklayer.h"
 #include <stdio.h>
@@ -20,7 +30,6 @@
       /*  - 0 unordered
           - 1 ordered descending */
 
-
 /* the url of the RSS feed from which to download memes */
 #define RSSFEED "https://www.reddit.com/r/me_irl.rss?sort=new&limit=50"
 
@@ -36,7 +45,6 @@
 #define MAX_MATCH 360
 
 /* TODO properly optimize for ordered queues */
-
 
 #define TEST 0
 
@@ -117,9 +125,14 @@ static int load_state()
     return -1;
   return 0;
 }
-static int init()
+static int goto_block(int blockNum)
+{
+  return real_goto_block(blockNum + METABLOCKS);
+}
+int block_dev_init(char *cwd)
 {
   char buffer[PATH_MAX] = {0};
+  path = strdup(cwd);
   strcpy((char *)&buffer, path);
   strcat((char *)&buffer, BIGFILENAME);
   bigfile = open((char *)&buffer, O_RDWR|O_CREAT|O_EXCL, BIGFILEMODE);
@@ -142,7 +155,7 @@ static int init()
   next_alloc = 0;
   return 0;
 }
-static int destroy()
+int block_dev_destroy()
 {
   int ret = 0;
   if (save_state() < 0)
@@ -155,21 +168,8 @@ static int destroy()
   {
     queue_pop(&freed_blocks);
   }
-  return ret;
-}
-static int goto_block(int blockNum)
-{
-  return real_goto_block(blockNum + METABLOCKS);
-}
-int block_dev_init(char *cwd)
-{
-  path = strdup(cwd);
-  return init();
-}
-int block_dev_destroy()
-{
   free(path);
-  return destroy();
+  return ret;
 }
 int read_block(int blockNum, char *buf)
 {
