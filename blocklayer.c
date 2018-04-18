@@ -837,7 +837,8 @@ static int int_to_name(int val, char *name)
   char buffer[NAME_MAX] = {0};
   if (val == -1)
   {
-    strcpy(name, METANAME);
+    strcpy(name, path);
+    strcat(name, METANAME);
     return 0;
   }
   snprintf((char *)&buffer, NAME_MAX, "%d%s", val, EXTENTION);
