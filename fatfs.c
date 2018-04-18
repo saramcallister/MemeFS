@@ -57,6 +57,7 @@ struct fat_superblock {
 	fat_ptr free_list;
 	fat_ptr root_dir;
 	int free_blocks;
+	fat_ptr fat_blocks[BLOCKS(sizeof(fat_ptr) * NUM_BLOCKS)];
 };
 
 struct directory_entry {
@@ -143,10 +144,14 @@ static void write_superblock()
 
 static void read_fat()
 {
+    char buf[BLOCK_SIZE];
 	int ret;
-	ret = read_block(1, (char*) &fat);
-	if (ret != 0) {
-		printf("error: did not read entire fat table");
+	for (int i = 0; i < BLOCKS(sizeof fat); i++) {
+        ret = read_block(sb_data.s.fat_blocks[i], buf);
+        memcpy(((char *)fat) + BLOCK_SIZE, buf, BLOCK_SIZE);
+        if (ret != 0) {
+            printf("error: did not read entire fat table");
+        }
 	}
 	printf("read_fat %x: [%x, %x, %x, %x, %x, %x, %x, %x, ...]\n", BLOCK_SIZE,
 		fat[0], fat[1], fat[2], fat[3], fat[4], fat[5], fat[6], fat[7]);
@@ -154,10 +159,14 @@ static void read_fat()
 
 static void write_fat()
 {
+    char buf[BLOCK_SIZE];
 	int ret;
-	ret = write_block(1, (char*) &fat);
-	if (ret != 0) {
-		printf("error: did not write entire fat table");
+	for (int i = 0; i < BLOCKS(sizeof fat); i++) {
+        memcpy(buf, ((char *)fat) + BLOCK_SIZE, BLOCK_SIZE);
+        ret = write_block(sb_data.s.fat_blocks[i], buf);
+        if (ret != 0) {
+            printf("error: did not write entire fat table");
+        }
 	}
 	printf("write_fat %x: [%x, %x, %x, %x, %x, %x, %x, %x, ...]\n", BLOCK_SIZE,
 		fat[0], fat[1], fat[2], fat[3], fat[4], fat[5], fat[6], fat[7]);
@@ -532,7 +541,9 @@ static void* fatfs_init(struct fuse_conn_info *conn)
 	sb_data.s.free_blocks = NUM_BLOCKS - sb_data.s.free_list;
 
 	// fat allocation
-	allocate_block();
+	for(int i = 0; i < BLOCKS(sizeof fat); i++) {
+	    sb_data.s.fat_blocks[i] = allocate_block();
+	}
 	memset(fat, -1, sizeof(fat));
 
 	//init the free list
