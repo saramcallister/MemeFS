@@ -36,6 +36,8 @@ int memedl_destroy();
 
 static string_queue url_queue;
 
+static char *memepath;
+
 /* pass me an n and a buffer of size (buffer[n][MAX_MATCH]) */
 static int nmemeurls(int n, char* buffer)
 {
