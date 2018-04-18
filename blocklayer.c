@@ -887,7 +887,6 @@ int block_dev_init(char *cwd)
   path = strdup((char*)&temp);
 
   int_to_name(-1,(char*)&name);
-  new_meme((char*)&name);
   metafile = open((char*)&name, O_RDWR|O_CREAT|O_EXCL, FILEMODE);
   if (metafile < 1)
   {
