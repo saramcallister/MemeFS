@@ -21,7 +21,7 @@
 
 #define TESTPATH "/home/meow/Documents/MemeFS/"
 
-#define VERSION 0
+#define VERSION 2
       /*  - 0 just use a big file
           - 1 use text files
           - 2 actually use images */
@@ -886,6 +886,7 @@ int block_dev_init(char *cwd)
   path = strdup((char*)&temp);
 
   int_to_name(-1,(char*)&name);
+  new_meme((char*)&name);
   metafile = open((char*)&name, O_RDWR|O_CREAT|O_EXCL, FILEMODE);
   if (metafile < 1)
   {
@@ -909,12 +910,12 @@ int block_dev_destroy()
 static int image_read(const char *path, char *buf)
 {
   /* stub temp for stenography */
-  return 0;
+  return readData(path, buf, BLOCKSIZE);
 }
 static int image_write(const char *path, const char* buf)
 {
   /* stub temp for stenography */
-  return 0;
+  return writeData(path, buf, BLOCKSIZE);
 }
 int read_block(int blockNum, char *buf)
 {

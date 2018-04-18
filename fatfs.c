@@ -118,7 +118,7 @@ static void write_block_fs(fat_ptr id, void *data)
 	printf("write_block_fs %x\n", id);
 }
 
-static void read_superblock()
+static int read_superblock()
 {
 	int ret;
 	
@@ -128,6 +128,8 @@ static void read_superblock()
 	}
 	printf("read_superblock 0: root = %x, free = %x\n",
 		sb_data.s.root_dir, sb_data.s.free_list);
+
+    return ret;
 }
 
 static void write_superblock()
@@ -532,40 +534,44 @@ static void* fatfs_init(struct fuse_conn_info *conn)
 		exit(1);
 	} 
 
-	// currently assumes that files do not already exist
-	// TODO: fix this assumption
-	
-	// superblock allocation
-	allocate_block();
-	sb_data.s.free_list = 1 + BLOCKS(sizeof fat);
-	sb_data.s.free_blocks = NUM_BLOCKS - sb_data.s.free_list;
+	ret = read_superblock();
+	if (ret != 0) {
+	    // fs doesn't exist; create it!
+	    
+        // superblock allocation
+        allocate_block();
+        sb_data.s.free_list = 1 + BLOCKS(sizeof fat);
+        sb_data.s.free_blocks = NUM_BLOCKS - sb_data.s.free_list;
 
-	// fat allocation
-	for(int i = 0; i < BLOCKS(sizeof fat); i++) {
-	    sb_data.s.fat_blocks[i] = allocate_block();
-	}
-	memset(fat, -1, sizeof(fat));
+        // fat allocation
+        for(int i = 0; i < BLOCKS(sizeof fat); i++) {
+            sb_data.s.fat_blocks[i] = allocate_block();
+        }
+        memset(fat, -1, sizeof(fat));
 
-	//init the free list
-	fat_ptr i;
-	for (i = sb_data.s.free_list; i < NUM_BLOCKS - 1; i++) {
-		fat[i] = i+1;
-	}
-	fat[NUM_BLOCKS - 1] = -1;
+        //init the free list
+        fat_ptr i;
+        for (i = sb_data.s.free_list; i < NUM_BLOCKS - 1; i++) {
+            fat[i] = i+1;
+        }
+        fat[NUM_BLOCKS - 1] = -1;
 
-	// init the root dir (with itself as its parent)
-	// this writes to disk a lot of things
-	struct directory_entry root_entry = {
-		.name = "/",
-		.size = BLOCK_SIZE,
-		.mode = S_IFDIR | 0755,
-		.start = alloc_blocks(1),
-	};
-	sb_data.s.root_dir = root_entry.start;
+        // init the root dir (with itself as its parent)
+        // this writes to disk a lot of things
+        struct directory_entry root_entry = {
+            .name = "/",
+            .size = BLOCK_SIZE,
+            .mode = S_IFDIR | 0755,
+            .start = alloc_blocks(1),
+        };
+        sb_data.s.root_dir = root_entry.start;
 
-	init_dir(&root_entry, &root_entry);
+        init_dir(&root_entry, &root_entry);
 
-	write_superblock();
+        write_superblock();
+    } else {
+        read_fat();
+    }
 	return NULL;
 }
 
