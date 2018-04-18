@@ -474,6 +474,7 @@ int block_dev_init(char *cwd)
   char temp[PATH_MAX];
   strcpy((char*)&temp, cwd);
   strcat((char*)&temp, "/");
+  strcat((char*)&temp, FOLDRNAME);
   path = strdup((char*)&temp);
   printf("\t\tPATH: %s\n", path);
   int_to_name(-1, (char*)&name);
@@ -880,9 +881,10 @@ int block_dev_init(char *cwd)
   char temp[PATH_MAX];
   strcpy((char*)&temp, cwd);
   strcat((char*)&temp, "/");
+  memedl_init((char*)&temp);
+  strcat((char*)&temp, FOLDRNAME);
   path = strdup((char*)&temp);
 
-  memedl_init();
   int_to_name(-1,(char*)&name);
   metafile = open((char*)&name, O_RDWR|O_CREAT|O_EXCL, FILEMODE);
   if (metafile < 1)
