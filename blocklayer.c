@@ -851,7 +851,6 @@ static int save_state()
 {
   char rbuff[BLOCKSIZE] = {0};
   int *buff;
-  int size;
   buff = (int*)&rbuff;
   buff[0] = next_alloc;
   queue_save(buff+1, &freed_blocks);
@@ -864,11 +863,9 @@ static int load_state()
 {
   char rbuff[BLOCKSIZE] = {0};
   int *buff;
-  int size;
   read_block(-1, (char*)&rbuff);
   buff = (int*)&rbuff;
   next_alloc = buff[0];
-  size = buff[1];
   freed_blocks = new_queue();
   queue_load(buff+1, &freed_blocks);
   return 0;
