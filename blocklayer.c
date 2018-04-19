@@ -1,4 +1,14 @@
 /* AUTHOR: M Jake Palanker */
+/* this is the implimentation of the blocklayer
+ * this code is broken up into several different parts
+ * each version has its own implimentation and the pre-processor
+ * will remove all but the selected version (see VERSION)
+ * preprocessor flags also allow this code to be compiled into a full executable
+ * enabling TEST will introduce a main() and several testing functions
+ * you can also change the queue type at compile time by changing QUETYPE
+ * Some of the compile time flags that are more likely to be changed when using
+ * the blocklayer are in the blocklayer.h file
+ */
 
 #include "blocklayer.h"
 #include <stdio.h>
@@ -11,7 +21,7 @@
 
 #define TESTPATH "/home/meow/Documents/MemeFS/"
 
-#define VERSION 1
+#define VERSION 2
       /*  - 0 just use a big file
           - 1 use text files
           - 2 actually use images */
@@ -19,7 +29,6 @@
 #define QUETYPE 1
       /*  - 0 unordered
           - 1 ordered descending */
-
 
 /* the url of the RSS feed from which to download memes */
 #define RSSFEED "https://www.reddit.com/r/me_irl.rss?sort=new&limit=50"
@@ -37,11 +46,11 @@
 
 /* TODO properly optimize for ordered queues */
 
-
 #define TEST 0
 
-#define WORKTEST 0
+#define WORKTEST 1
 
+#define TESTLOAD 1
 
 #if QUETYPE == 0
 #include "queue.c"
@@ -56,54 +65,116 @@
 #if VERSION == 0
 #define BIGFILENAME "temp_blockdev" /* only used in version 0 */
 #define BIGFILEMODE 0000666
+#define METABLOCKS 1
 
 /* bigfile version globals */
 int bigfile;
 queue freed_blocks;
 int next_alloc;
 char *path;
-static int init()
+static int real_goto_block(int blockNum)
+{
+  if(lseek(bigfile, (blockNum) * BLOCKSIZE, SEEK_SET) < 0)
+  {
+    printf("\tError Seeking File\n");
+    return -1;
+  }
+  return 0;
+}
+static int save_state()
+{
+  int size;
+  int buffersize;
+  int written;
+  int *buff;
+  size = freed_blocks.size;
+  buffersize = (size + 2) * sizeof(int);
+  if (buffersize > BLOCKSIZE)
+  {
+    printf("\tERROR, DATA STRUCTURE LARGER THAN BLOCKSIZE\n");
+    return -1;
+  }
+  buff = malloc(buffersize);
+  buff[0] = next_alloc;
+  queue_save(buff+1, &freed_blocks);
+  real_goto_block(0);
+  written = write(bigfile, buff, BLOCKSIZE);
+  if (written < 0)
+  {
+    return -1;
+  }
+  free(buff);
+  return 0;
+}
+static int load_state()
+{
+  char rbuff[BLOCKSIZE];
+  int *buff;
+  int ret;
+  size_t size;
+  buff = (int*) &rbuff;
+  real_goto_block(0);
+  ret = read(bigfile, buff, BLOCKSIZE);
+  next_alloc = buff[0];
+  size = (size_t)buff[1];
+  if (ret < 0)
+    return -1;
+  freed_blocks = new_queue();
+  queue_load(buff+1, &freed_blocks);
+  if (freed_blocks.size != size)
+    return -1;
+  return 0;
+}
+static int goto_block(int blockNum)
+{
+  return real_goto_block(blockNum + METABLOCKS);
+}
+int block_dev_init(char *cwd)
 {
   char buffer[PATH_MAX] = {0};
+  char temp[PATH_MAX];
+  strcpy((char*)&temp, cwd);
+  strcat((char*)&temp, "/");
+  path = strdup((char*)&temp);
+
+  printf("\t\tPATH: %s\n", path);
   strcpy((char *)&buffer, path);
   strcat((char *)&buffer, BIGFILENAME);
-  bigfile = open((char *)&buffer, O_RDWR|O_CREAT, BIGFILEMODE);
+  bigfile = open((char *)&buffer, O_RDWR|O_CREAT|O_EXCL, BIGFILEMODE);
   if (bigfile < 0)
   {
-    printf("Couldn't open file");
-    return -1;
+    bigfile = open((char *)&buffer, O_RDWR, BIGFILEMODE);
+    if (bigfile < 0)
+    {
+      printf("\tERROR creating bigfile\n");
+      return -1;
+    }
+    if (load_state() < 0)
+    {
+      printf("\tError loading previous state\n");
+      return -1;
+    }
+    return 0;
   }
   freed_blocks = new_queue();
   next_alloc = 0;
   return 0;
 }
-static int destroy()
+int block_dev_destroy()
 {
+  int ret = 0;
+  if (save_state() < 0)
+  {
+    printf("\tERROR Saving state failed\n");
+    ret = -1;
+  }
   close(bigfile);
   while (queue_size(&freed_blocks) > 0)
   {
     queue_pop(&freed_blocks);
   }
-  return 0;
-}
-static int goto_block(int blockNum)
-{
-  if(lseek(bigfile, blockNum * BLOCKSIZE, SEEK_SET) < 0)
-  {
-    printf("Error Seeking File\n");
-    return -1;
-  }
-  return 0;
-}
-int block_dev_init(char *cwd)
-{
-  path = strdup(cwd);
-  return init();
-}
-int block_dev_destroy()
-{
   free(path);
-  return destroy();
+  return ret;
 }
 int read_block(int blockNum, char *buf)
 {
@@ -121,6 +192,11 @@ int read_block(int blockNum, char *buf)
 }
 int write_block(int blockNum, const char *buf)
 {
+  if (blockNum >= next_alloc)
+  {
+    /* I'm being asked about a block you definetly havent alloced yet */
+    return -1;
+  }
   goto_block(blockNum);
   if (write(bigfile, buf, BLOCKSIZE) < 0)
   {
@@ -170,6 +246,7 @@ int free_block(int blockNum)
     return retval;
   }
 }
+#if TEST
 static int basic_test()
 {
   char write_buffer[BLOCKSIZE];
@@ -295,6 +372,37 @@ static int far_test()
 }
 static int run_tests()
 {
+#if TESTLOAD
+  int i;
+  int tm;
+  printf("PRINTING DIAGNOSTICS\n");
+  printf("\tnext_alloc: %d\n\tfreed_blocks.size: %ld\n", next_alloc, freed_blocks.size);
+
+  for (i = 0; i < 30; i++)
+  {
+    tm = allocate_block();
+    printf("allocated block %d\n", tm);
+    if (tm == -1)
+    {
+      printf("\tERROR getting block %d\n", i);
+      return -1;
+    }
+  }
+  for (i = 0; i < 29; i++)
+  {
+    tm = free_block(i);
+    printf("freed block %d\n", i);
+    if (tm == -1)
+    {
+      printf("\tERROR freeing block %d\n", i);
+      return -1;
+    }
+  }
+  printf("PRINTING DIAGNOSTICS\n");
+  printf("\tnext_alloc: %d\n\tfreed_blocks.size: %ld\n", next_alloc, freed_blocks.size);
+
+  return 0;
+#else
   if (basic_test() == -1)
   {
     printf("error in basic_test\n");
@@ -311,39 +419,82 @@ static int run_tests()
     return -1;
   }
   return 0;
+#endif
 }
-
+#endif
 
 #elif VERSION == 1
 /* many files version */
 #define EXTENTION ".txt"
+#define METANAME "meta.txt"
 /* globals */
 queue freed_blocks;
 int next_alloc;
 char *path;
-
+static int int_to_name(int val, char *name)
+{
+  char buffer[NAME_MAX] = {0};
+  if (val == -1)
+  {
+    strcpy(name, METANAME);
+    return 0;
+  }
+  snprintf((char *)&buffer, NAME_MAX, "%d%s", val, EXTENTION);
+  strcpy(name, path);
+  strcat(name, (char*)&buffer);
+  return 0;
+}
+static int save_state()
+{
+  char rbuff[BLOCKSIZE] = {0};
+  int *buff;
+  buff = (int*)&rbuff;
+  buff[0] = next_alloc;
+  queue_save(buff+1, &freed_blocks);
+  write_block(-1, (char*)&rbuff);
+  read_block(-1, (char*)&rbuff);
+  buff = (int*)&rbuff;
+  return 0;
+}
+static int load_state()
+{
+  char rbuff[BLOCKSIZE] = {0};
+  int *buff;
+  read_block(-1, (char*)&rbuff);
+  buff = (int*)&rbuff;
+  next_alloc = buff[0];
+  freed_blocks = new_queue();
+  queue_load(buff+1, &freed_blocks);
+  return 0;
+}
 int block_dev_init(char *cwd)
 {
-  path = strdup(cwd);
+  int metafile;
+  char name[NAME_MAX];
+  char temp[PATH_MAX];
+  strcpy((char*)&temp, cwd);
+  strcat((char*)&temp, "/");
+  strcat((char*)&temp, FOLDRNAME);
+  path = strdup((char*)&temp);
+  printf("\t\tPATH: %s\n", path);
+  int_to_name(-1, (char*)&name);
+  metafile = open((char*)name, O_RDWR|O_CREAT|O_EXCL, FILEMODE);
+  if (metafile < 1)
+  {
+    close(metafile);
+    load_state();
+    return 0;
+  }
+  close(metafile);
   freed_blocks = new_queue();
   next_alloc = 0;
   return 0;
 }
 int block_dev_destroy()
 {
-  while (queue_size(&freed_blocks) > 0)
-  {
-    queue_pop(&freed_blocks);
-  }
+  save_state();
+  queue_destroy(&freed_blocks);
   free(path);
-  return 0;
-}
-static int int_to_name(int val, char *name)
-{
-  char buffer[NAME_MAX] = {0};
-  snprintf((char *)&buffer, NAME_MAX, "%d%s", val, EXTENTION);
-  strcpy(name, path);
-  strcat(name, (char*)&buffer);
   return 0;
 }
 int read_block(int blockNum, char *buf)
@@ -424,7 +575,7 @@ int free_block(int blockNum)
   int retval;
   if (remove_file(blockNum) == -1)
   {
-    printf("ERROR removing\n");
+    printf("\tERROR removing file\n");
   }
   if (blockNum == (next_alloc - 1))
   {
@@ -439,6 +590,7 @@ int free_block(int blockNum)
     return retval;
   }
 }
+#if TEST
 static int basic_test()
 {
   char write_buffer[BLOCKSIZE];
@@ -602,6 +754,38 @@ static int queue_test()
 }
 static int run_tests()
 {
+
+#if TESTLOAD
+  int i;
+  int tm;
+  printf("PRINTING DIAGNOSTICS\n");
+  printf("\tnext_alloc: %d\n\tfreed_blocks.size: %ld\n", next_alloc, freed_blocks.size);
+
+  for (i = 0; i < 30; i++)
+  {
+    tm = allocate_block();
+    printf("allocated block %d\n", tm);
+    if (tm == -1)
+    {
+      printf("\tERROR getting block %d\n", i);
+      return -1;
+    }
+  }
+  for (i = 0; i < 29; i++)
+  {
+    tm = free_block(i);
+    printf("freed block %d\n", i);
+    if (tm == -1)
+    {
+      printf("\tERROR freeing block %d\n", i);
+      return -1;
+    }
+  }
+  printf("PRINTING DIAGNOSTICS\n");
+  printf("\tnext_alloc: %d\n\tfreed_blocks.size: %ld\n", next_alloc, freed_blocks.size);
+
+  return 0;
+#else
   if (basic_test() == -1)
   {
     printf("error in basic_test\n");
@@ -623,7 +807,9 @@ static int run_tests()
     return -1;
   }
   return 0;
+#endif
 }
+#endif
 
 #else
 /* images version */
@@ -632,6 +818,7 @@ static int run_tests()
 /* TODO support directory stuffs */
 #include "memedl.c"
 #define EXTENTION ".jpg"
+#define METANAME "meta.jpg"
 
 /* globals */
 queue freed_blocks;
@@ -648,22 +835,74 @@ static int new_meme(char *path)
 static int int_to_name(int val, char *name)
 {
   char buffer[NAME_MAX] = {0};
+  if (val == -1)
+  {
+    strcpy(name, path);
+    strcat(name, METANAME);
+    return 0;
+  }
   snprintf((char *)&buffer, NAME_MAX, "%d%s", val, EXTENTION);
   strcpy(name, path);
   strcat(name, (char*)&buffer);
   return 0;
 }
+
+static int save_state()
+{
+  char rbuff[BLOCKSIZE] = {0};
+  int *buff;
+  int size;
+  buff = (int*)&rbuff;
+  buff[0] = next_alloc;
+  queue_save(buff+1, &freed_blocks);
+  write_block(-1, (char*)&rbuff);
+  read_block(-1, (char*)&rbuff);
+  buff = (int*)&rbuff;
+  return 0;
+}
+static int load_state()
+{
+  char rbuff[BLOCKSIZE] = {0};
+  int *buff;
+  int size;
+  read_block(-1, (char*)&rbuff);
+  buff = (int*)&rbuff;
+  next_alloc = buff[0];
+  size = buff[1];
+  freed_blocks = new_queue();
+  queue_load(buff+1, &freed_blocks);
+  return 0;
+}
+/* TODO update init and destroy to use load and save */
 int block_dev_init(char *cwd)
 {
-  memedl_init();
+  int metafile;
+  char name[NAME_MAX];
+
+  char temp[PATH_MAX];
+  strcpy((char*)&temp, cwd);
+  strcat((char*)&temp, "/");
+  memedl_init((char*)&temp);
+  strcat((char*)&temp, FOLDRNAME);
+  path = strdup((char*)&temp);
+
+  int_to_name(-1,(char*)&name);
+  metafile = open((char*)&name, O_RDWR|O_CREAT|O_EXCL, FILEMODE);
+  if (metafile < 1)
+  {
+    close(metafile);
+    load_state();
+    return 0;
+  }
+  close(metafile);
   freed_blocks = new_queue();
   next_alloc = 0;
-  path = strdup(cwd);
   return 0;
 }
 int block_dev_destroy()
 {
   memedl_destroy();
+  save_state();
   queue_destroy(&freed_blocks);
   free(path);
   return 0;
@@ -671,12 +910,12 @@ int block_dev_destroy()
 static int image_read(const char *path, char *buf)
 {
   /* stub temp for stenography */
-  return 0;
+  return readData(path, buf, BLOCKSIZE);
 }
 static int image_write(const char *path, const char* buf)
 {
   /* stub temp for stenography */
-  return 0;
+  return writeData(path, buf, BLOCKSIZE);
 }
 int read_block(int blockNum, char *buf)
 {
@@ -762,7 +1001,7 @@ int free_block(int blockNum)
 }
 
 
-
+#if TEST
 static int basic_test()
 {
   char write_buffer[BLOCKSIZE];
@@ -954,6 +1193,7 @@ static int run_tests()
   return 0;
 }
 
+#endif
 #endif
 
 #if TEST /* include main for running some tests */

@@ -8,10 +8,11 @@
 
 #define MEMEDL_TESTS 0
 
+#define DLFOLDRNAME ".dl/"
+
 #if MEMEDL_TESTS
 #define RSSFEED "https://www.reddit.com/r/me_irl.rss?sort=new&limit=50"
 
-#define DLFOLDRNAME ".dl/"
 
 #define GETSIZE 50
 
@@ -20,7 +21,7 @@
 #endif
 
 /* initializes required stuff for get_meme */
-int memedl_init();
+int memedl_init(char *path);
 
 /* will download a BRAND NEW* meme and return you the filename
 * *brand new relies on some assumptions about how frequently you ask
@@ -35,6 +36,8 @@ int memedl_destroy();
 
 
 static string_queue url_queue;
+
+static char *dlpath;
 
 /* pass me an n and a buffer of size (buffer[n][MAX_MATCH]) */
 static int nmemeurls(int n, char* buffer)
@@ -76,7 +79,7 @@ static char *url_queue_pop(string_queue *q)
   char *url;
   char *ptr;
 
-  strcpy((char*)&dest, DLFOLDRNAME);
+  strcpy((char*)&dest, dlpath);
   url = string_queue_pop(q);
 
   ptr = filenameget(url);
@@ -96,8 +99,12 @@ char *get_meme()
   return url_queue_pop(&url_queue);
 }
 
-int memedl_init()
+int memedl_init(char *path)
 {
+  char buff[PATH_MAX];
+  strcpy((char*)&buff, path);
+  strcat((char*)&buff, DLFOLDRNAME);
+  dlpath = strdup((char*)&buff);
   url_queue = get_url_queue();
   return 0;
 }
@@ -115,7 +122,7 @@ int main(int argc, char const *argv[])
 {
   char *new;
   int i;
-  memedl_init();
+  memedl_init("./");
   for (i = 0; i < GETSIZE; i++)
   {
     new = get_meme();
