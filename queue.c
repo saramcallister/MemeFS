@@ -125,6 +125,8 @@ int queue_remove(int data, queue *q)
     queue_pop(q);
     return 0;
   }
+  last = next;
+  next = next->next;
   while (next != NULL)
   {
     if (next->data == data)
