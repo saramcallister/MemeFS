@@ -45,6 +45,11 @@ static int nmemeurls(int n, char* buffer)
   char *ret;
   int r;
   ret = getinmemory(RSSFEED);
+  if (ret == NULL)
+  {
+    printf("Getting RSS Failed... are you online?\n");
+    return -1;
+  }
   r = getnjpg(n, ret,buffer);
   free(ret);
   return r;
@@ -95,6 +100,11 @@ char *get_meme()
   if (string_queue_size(&url_queue) == 0)
   {
     url_queue = get_url_queue();
+    if (string_queue_size(&url_queue) == 0)
+    {
+      printf("Tried to get more memes and failed.\n");
+      return NULL;
+    }
   }
   return url_queue_pop(&url_queue);
 }
@@ -106,6 +116,11 @@ int memedl_init(char *path)
   strcat((char*)&buff, DLFOLDRNAME);
   dlpath = strdup((char*)&buff);
   url_queue = get_url_queue();
+  if (string_queue_size(&url_queue) == 0)
+  {
+    printf("I Think your internet is not working\n");
+    return -1;
+  }
   return 0;
 }
 

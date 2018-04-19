@@ -874,12 +874,17 @@ static int load_state()
 int block_dev_init(char *cwd)
 {
   int metafile;
+  int ret;
   char name[NAME_MAX];
-
   char temp[PATH_MAX];
   strcpy((char*)&temp, cwd);
   strcat((char*)&temp, "/");
-  memedl_init((char*)&temp);
+  ret = memedl_init((char*)&temp);
+  if (ret < 0)
+  {
+    printf("Initializing memedl didn't work\n");
+    return -1;
+  }
   strcat((char*)&temp, FOLDRNAME);
   path = strdup((char*)&temp);
 
