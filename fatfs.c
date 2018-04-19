@@ -42,7 +42,7 @@
 */
 
 // 10 MB
-#define FS_SIZE (10*1024*1024)
+#define FS_SIZE (40*1024)
 #define BLOCK_SIZE BLOCKSIZE
 #define FILES_PER_DIR ((BLOCK_SIZE - 4) / (sizeof(struct directory_entry)))
 #define NUM_BLOCKS (FS_SIZE / BLOCK_SIZE)
@@ -91,11 +91,11 @@ char *current_path;
 static void read_block_fs(fat_ptr id, void *dest)
 {
 	int ret;
-	
+
 	if (id < 0) {
 		printf("error: trying to read invalid block %d\n", id);
 	}
-	
+
 	ret = read_block(id, (char*) dest);
 	if (ret != 0) {
 		printf("error: did not read entire block");
@@ -106,11 +106,11 @@ static void read_block_fs(fat_ptr id, void *dest)
 static void write_block_fs(fat_ptr id, void *data)
 {
 	int ret;
-	
+
 	if (id < 0) {
 		printf("error: trying to write to invalid block %d\n", id);
 	}
-	
+
 	ret = write_block(id, (char*) data);
 	if (ret != 0) {
 		printf("error: did not write entire block");
@@ -121,7 +121,7 @@ static void write_block_fs(fat_ptr id, void *data)
 static int read_superblock()
 {
 	int ret;
-	
+
 	ret = read_block(0, (char*) &sb_data);
 	if (ret != 0) {
 		printf("error: did not read entire superblock");
@@ -199,7 +199,7 @@ static fat_ptr alloc_blocks(int num_blocks)
 
 	// fat_ptr of -1 represents no blocks
 	if (num_blocks < 1) return -1;
-	
+
 	fat_ptr start = allocate_block();
 	fat_ptr last_block = start;
 	for (i = 0; i < num_blocks; i++) {
@@ -532,12 +532,12 @@ static void* fatfs_init(struct fuse_conn_info *conn)
 	if (ret != 0) {
 		fprintf(stderr, "Block device did not initialize. Returned %d\n", ret);
 		exit(1);
-	} 
+	}
 
 	ret = read_superblock();
 	if (ret != 0) {
 	    // fs doesn't exist; create it!
-	    
+
         // superblock allocation
         allocate_block();
         sb_data.s.free_list = 1 + BLOCKS(sizeof fat);

@@ -5,7 +5,7 @@
 
 
 /* here's the blocksize, please give me buffers of at least this large */
-#define BLOCKSIZE 4096
+#define BLOCKSIZE 256
 
 /* call this exactly once to initialize require values and datastructures */
 int block_dev_init(char *cwd);
