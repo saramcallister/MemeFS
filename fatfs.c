@@ -20,7 +20,11 @@
 #define _XOPEN_SOURCE 500
 #endif
 
-#define _GNU_SOURCE
+// only available on linux, otherwise don't need.
+#ifndef O_PATH
+#define O_PATH 0
+#endif
+
 #include <string.h>
 
 #include <fuse.h>
@@ -319,12 +323,12 @@ static fat_ptr resolve_path(const char *path, struct directory_entry *de_out)
 		path = "/.";
 	}
 
-	while (path[0] == '/') {
+	while (path != NULL) {
 		path++;
-		const char* rest_of_path = strchrnul(path, '/');
-		if (de_out == NULL && rest_of_path[0] != '/') return cur_dir_id;
+		const char* rest_of_path = strchr(path, '/');
+		if (de_out == NULL && rest_of_path == NULL) return cur_dir_id;
 
-		int offset = find_in_dir(path, rest_of_path - path,
+		int offset = find_in_dir(path, rest_of_path == NULL? -1: rest_of_path - path,
 		                         &cur_dir_id, &cur_dir);
 		if (offset < 0) return -ENOENT;
 
@@ -332,7 +336,7 @@ static fat_ptr resolve_path(const char *path, struct directory_entry *de_out)
 		parent_dir_id = cur_dir_id;
 		cur_dir_id = current_de->start;
 
-		if (!(current_de->mode & S_IFDIR) && rest_of_path[0] == '/') {
+		if (!(current_de->mode & S_IFDIR) && rest_of_path != NULL) {
 			return -ENOTDIR;
 		}
 		path = rest_of_path;
@@ -933,6 +937,7 @@ static struct fuse_operations fatfs_oper = {
 
 int main(int argc, char *argv[])
 {
-	current_path = get_current_dir_name();
+	current_path = malloc(MAXPATHLEN);
+	getcwd(current_path, MAXPATHLEN);
 	return fuse_main(argc, argv, &fatfs_oper, NULL);
 }
