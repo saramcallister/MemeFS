@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include "getinmemory.c"
 #include "urlextract.c"
 #include "url2file.c"
@@ -115,6 +116,11 @@ int memedl_init(char *path)
   strcpy((char*)&buff, path);
   strcat((char*)&buff, DLFOLDRNAME);
   dlpath = strdup((char*)&buff);
+  int err = mkdir(dlpath, 0755);
+  if (err < 0 && errno != EEXIST)
+  {
+    printf("Error creating downloads directory: %s\n", strerror(errno));
+  }
   url_queue = get_url_queue();
   if (string_queue_size(&url_queue) == 0)
   {
