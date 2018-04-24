@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS = -g -Og -Wall -Wextra
+CFLAGS = -g -Og -Wall -Wextra -Wno-unused-parameter
 PKGFLAGS = `pkg-config fuse --cflags --libs` -lcurl
 DEPS = blocklayer.h jsteg.h
 OBJ = blocklayer.o fatfs.o

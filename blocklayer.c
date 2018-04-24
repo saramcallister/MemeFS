@@ -11,6 +11,8 @@
  */
 
 #include "blocklayer.h"
+#include "jsteg.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -909,16 +911,6 @@ int block_dev_destroy()
   free(path);
   return 0;
 }
-static int image_read(const char *path, char *buf)
-{
-  /* stub temp for stenography */
-  return readData(path, buf, BLOCKSIZE);
-}
-static int image_write(const char *path, const char* buf)
-{
-  /* stub temp for stenography */
-  return writeData(path, buf, BLOCKSIZE);
-}
 int read_block(int blockNum, char *buf)
 {
   char filename[NAME_MAX];
@@ -928,7 +920,7 @@ int read_block(int blockNum, char *buf)
     return -1;
   }
   int_to_name(blockNum, (char *) &filename);
-  image_read((char*)&filename,buf);
+  readData(filename, buf, BLOCKSIZE);
   return 0;
 }
 int write_block(int blockNum, const char *buf)
@@ -942,7 +934,7 @@ int write_block(int blockNum, const char *buf)
   int_to_name(blockNum, (char *) &filename);
   remove((char*)&filename);
   new_meme((char*)&filename);
-  image_write((char*)&filename, buf);
+  writeData(filename, (void *)buf, BLOCKSIZE);
   return 0;
 }
 int allocate_block()
@@ -963,7 +955,7 @@ int allocate_block()
   }
   int_to_name(newblock, (char *) &filename);
   new_meme((char*)&filename);
-  image_write((char*)&filename, buffer);
+  writeData(filename, buffer, BLOCKSIZE);
   return newblock;
 }
 static int free_cleanup()
