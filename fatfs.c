@@ -25,14 +25,17 @@
 #define O_PATH 0
 #endif
 
-#include <string.h>
+#define _GNU_SOURCE
+#include <unistd.h>
 
+#include <string.h>
 #include <fuse.h>
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <stdlib.h>
+#include <limits.h>
+
 
 #include "blocklayer.h"
 
@@ -937,7 +940,14 @@ static struct fuse_operations fatfs_oper = {
 
 int main(int argc, char *argv[])
 {
-	current_path = malloc(MAXPATHLEN);
-	getcwd(current_path, MAXPATHLEN);
+#ifdef __GLIBC__
+    // this exists on glibc
+    current_path = get_current_dir_name();
+#else
+    // fall back to POSIX
+    // (fails if PATH_MAX not defined)
+	current_path = malloc(PATH_MAX);
+	getcwd(current_path, PATH_MAX);
+#endif
 	return fuse_main(argc, argv, &fatfs_oper, NULL);
 }
