@@ -48,8 +48,8 @@
   and is pointed to by the superblock.
 */
 
-// 10 MB
-#define FS_SIZE (10*1024*1024)
+// 40 KB
+#define FS_SIZE (40*1024)
 #define BLOCK_SIZE BLOCKSIZE
 #define FILES_PER_DIR ((BLOCK_SIZE - 4) / (sizeof(struct directory_entry)))
 #define NUM_BLOCKS (FS_SIZE / BLOCK_SIZE)
