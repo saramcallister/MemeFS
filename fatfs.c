@@ -110,7 +110,7 @@ static void read_block_fs(fat_ptr id, void *dest)
 	printf("read_block_fs %x\n", id);
 }
 
-static void write_block_fs(fat_ptr id, void *data)
+static void write_block_fs(fat_ptr id, const void *data)
 {
 	int ret;
 
@@ -779,7 +779,7 @@ static int fatfs_write(const char* path, const char *buf, size_t size, off_t off
 
 	// write all full blocks (if any)
 	while((size - so_far) >= BLOCK_SIZE) {
-		write_block_fs(block_ptr, &buf);
+		write_block_fs(block_ptr, buf);
 		buf += BLOCK_SIZE;
 		so_far += BLOCK_SIZE;
 
