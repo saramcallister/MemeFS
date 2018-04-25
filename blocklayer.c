@@ -20,6 +20,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <limits.h>
+#include <errno.h>
 
 #define TESTPATH "/home/meow/Documents/MemeFS/"
 
@@ -889,6 +890,11 @@ int block_dev_init(char *cwd)
   }
   strcat((char*)&temp, FOLDRNAME);
   path = strdup((char*)&temp);
+  int err = mkdir(path, 0755);
+  if (err < 0 && errno != EEXIST)
+  {
+    printf("Error creating memes directory: %s", strerror(errno));
+  }
 
   int_to_name(-1,(char*)&name);
   metafile = open((char*)&name, O_RDWR|O_CREAT|O_EXCL, FILEMODE);
