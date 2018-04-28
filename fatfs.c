@@ -20,15 +20,22 @@
 #define _XOPEN_SOURCE 500
 #endif
 
-#define _GNU_SOURCE
-#include <string.h>
+// only available on linux, otherwise don't need.
+#ifndef O_PATH
+#define O_PATH 0
+#endif
 
+#define _GNU_SOURCE
+#include <unistd.h>
+
+#include <string.h>
 #include <fuse.h>
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <stdlib.h>
+#include <limits.h>
+
 
 #include "blocklayer.h"
 
@@ -41,23 +48,27 @@
   and is pointed to by the superblock.
 */
 
-// 10 MB
-#define FS_SIZE (40*1024)
+// 40 KB
 #define BLOCK_SIZE BLOCKSIZE
 #define FILES_PER_DIR ((BLOCK_SIZE - 4) / (sizeof(struct directory_entry)))
-#define NUM_BLOCKS (FS_SIZE / BLOCK_SIZE)
+#define FAT_PER_BLOCK (BLOCK_SIZE / sizeof(fat_ptr))
 #define MAX_NAME_LEN 32
 #define MAX_PATH 4096
 
 #define BLOCKS(x) (((x) + BLOCK_SIZE - 1) / BLOCK_SIZE)
 
-typedef int fat_ptr;
+typedef unsigned int fat_ptr;
+// block 0 is the superblock,
+// so we use a fat_ptr of 0 as a null pointer.
+#define FAT_NULL 0
 
 struct fat_superblock {
 	fat_ptr free_list;
 	fat_ptr root_dir;
 	int free_blocks;
-	fat_ptr fat_blocks[BLOCKS(sizeof(fat_ptr) * NUM_BLOCKS)];
+	size_t fat_size;
+	fat_ptr fat_start;
+	fat_ptr fat_end; // for faster append
 };
 
 struct directory_entry {
@@ -79,12 +90,12 @@ typedef union {
 
 typedef union {
 	struct fat_superblock s;
-	char pad[512];
+	char pad[BLOCK_SIZE];
 } superblock;
 
 typedef char fat_block[BLOCK_SIZE];
 
-fat_ptr fat[NUM_BLOCKS];
+fat_ptr *fat;
 superblock sb_data;
 char *current_path;
 
@@ -92,28 +103,32 @@ static void read_block_fs(fat_ptr id, void *dest)
 {
 	int ret;
 
-	if (id < 0) {
-		printf("error: trying to read invalid block %d\n", id);
+	if (id == FAT_NULL) {
+		printf("fatal: trying to read invalid block\n");
+		exit(1);
 	}
 
 	ret = read_block(id, (char*) dest);
 	if (ret != 0) {
-		printf("error: did not read entire block");
+		printf("fatal: did not read entire block");
+		exit(1);
 	}
 	printf("read_block_fs %x\n", id);
 }
 
-static void write_block_fs(fat_ptr id, void *data)
+static void write_block_fs(fat_ptr id, const void *data)
 {
 	int ret;
 
-	if (id < 0) {
-		printf("error: trying to write to invalid block %d\n", id);
+	if (id == FAT_NULL) {
+		printf("fatal: trying to write to invalid block\n");
+		exit(1);
 	}
 
 	ret = write_block(id, (char*) data);
 	if (ret != 0) {
-		printf("error: did not write entire block");
+		printf("fatal: did not write entire block");
+		exit(1);
 	}
 	printf("write_block_fs %x\n", id);
 }
@@ -123,13 +138,11 @@ static int read_superblock()
 	int ret;
 
 	ret = read_block(0, (char*) &sb_data);
-	if (ret != 0) {
-		printf("error: did not read entire superblock");
-	}
+	
 	printf("read_superblock 0: root = %x, free = %x\n",
 		sb_data.s.root_dir, sb_data.s.free_list);
 
-    return ret;
+	return ret;
 }
 
 static void write_superblock()
@@ -138,7 +151,8 @@ static void write_superblock()
 
 	ret = write_block(0, (char*) &sb_data);
 	if (ret != 0) {
-		printf("error: did not write entire superblock");
+		printf("fatal: did not write entire superblock");
+		exit(1);
 	}
 	printf("write_superblock 0: root = %x, free = %x\n",
 		sb_data.s.root_dir, sb_data.s.free_list);
@@ -146,32 +160,64 @@ static void write_superblock()
 
 static void read_fat()
 {
-    char buf[BLOCK_SIZE];
-	int ret;
-	for (int i = 0; i < BLOCKS(sizeof fat); i++) {
-        ret = read_block(sb_data.s.fat_blocks[i], buf);
-        memcpy(((char *)fat) + BLOCK_SIZE, buf, BLOCK_SIZE);
-        if (ret != 0) {
-            printf("error: did not read entire fat table");
-        }
+	fat_ptr next_block = sb_data.s.fat_start;
+	fat_ptr *fat_pos = fat;
+	fat_ptr *expected_pos = fat + sb_data.s.fat_size;
+	while (fat_pos < expected_pos && next_block != FAT_NULL) {
+		read_block_fs(next_block, fat_pos);
+		next_block = fat[next_block];
+		fat_pos += FAT_PER_BLOCK;
 	}
-	printf("read_fat %x: [%x, %x, %x, %x, %x, %x, %x, %x, ...]\n", BLOCK_SIZE,
+	if (fat_pos != expected_pos) {
+		fprintf(stderr, "Error: read_fat %srun by %ld entries\n",
+			fat_pos > expected_pos? "over": "under", expected_pos - fat_pos);
+	}
+	printf("read_fat %lx: [%x, %x, %x, %x, %x, %x, %x, %x, ...]\n", sb_data.s.fat_size,
 		fat[0], fat[1], fat[2], fat[3], fat[4], fat[5], fat[6], fat[7]);
 }
 
 static void write_fat()
 {
-    char buf[BLOCK_SIZE];
-	int ret;
-	for (int i = 0; i < BLOCKS(sizeof fat); i++) {
-        memcpy(buf, ((char *)fat) + BLOCK_SIZE, BLOCK_SIZE);
-        ret = write_block(sb_data.s.fat_blocks[i], buf);
-        if (ret != 0) {
-            printf("error: did not write entire fat table");
-        }
+	fat_ptr next_block = sb_data.s.fat_start;
+	fat_ptr *fat_pos = fat;
+	fat_ptr *expected_pos = fat + sb_data.s.fat_size;
+	while (fat_pos < expected_pos && next_block != FAT_NULL) {
+		write_block_fs(next_block, fat_pos);
+		next_block = fat[next_block];
+		fat_pos += FAT_PER_BLOCK;
 	}
-	printf("write_fat %x: [%x, %x, %x, %x, %x, %x, %x, %x, ...]\n", BLOCK_SIZE,
+	if (fat_pos != expected_pos) {
+		fprintf(stderr, "Error: write_fat %srun by %ld entries\n",
+			fat_pos > expected_pos? "over": "under", expected_pos - fat_pos);
+	}
+	printf("write_fat %lx: [%x, %x, %x, %x, %x, %x, %x, %x, ...]\n", sb_data.s.fat_size,
 		fat[0], fat[1], fat[2], fat[3], fat[4], fat[5], fat[6], fat[7]);
+}
+
+static void realloc_fat()
+{
+	// reallocate in-memory fat
+	fat = reallocarray(fat, sb_data.s.fat_size + FAT_PER_BLOCK, sizeof(fat_ptr));
+	if (fat == NULL) {
+		fprintf(stderr, "Error allocating fat: %s\n", strerror(errno));
+		exit(1);
+	}
+	memset(fat + sb_data.s.fat_size, FAT_NULL, FAT_PER_BLOCK * sizeof(fat_ptr));
+
+	// allocate new fat block
+	fat_ptr new_block_pos = allocate_block();
+
+	// update previous last block to point to new block
+	if (sb_data.s.fat_end != FAT_NULL) {
+		fat[sb_data.s.fat_end] = new_block_pos;
+	} else {
+		sb_data.s.fat_start = new_block_pos;
+	}
+
+	// update superblock metadata
+	sb_data.s.fat_end = new_block_pos;
+	sb_data.s.fat_size += FAT_PER_BLOCK;
+	sb_data.s.free_blocks += FAT_PER_BLOCK - 1;
 }
 
 // performs no error checking
@@ -187,7 +233,7 @@ static fat_ptr nth_block(fat_ptr start, int offset)
 
 static fat_ptr last_block(fat_ptr start)
 {
-	while (fat[start] >= 0) start = fat[start];
+	while (fat[start] != FAT_NULL) start = fat[start];
 	return start;
 }
 
@@ -197,23 +243,23 @@ static fat_ptr alloc_blocks(int num_blocks)
 	int i;
 	fat_ptr new_block;
 
-	// fat_ptr of -1 represents no blocks
-	if (num_blocks < 1) return -1;
-
+	// fat_ptr of 0 represents no blocks
+	if (num_blocks < 1) return FAT_NULL;
+	
 	fat_ptr start = allocate_block();
 	fat_ptr last_block = start;
-	for (i = 0; i < num_blocks; i++) {
+	// start at 1 because we've already allocated a block
+	for (i = 1; i < num_blocks; i++) {
 		new_block = allocate_block();
-		if (new_block > NUM_BLOCKS) {
-			// TODO: extend table
-			fprintf(stderr, "No more spaces in FAT table");
-			exit(1);
+		while (new_block >= sb_data.s.fat_size) {
+			printf("FAT full; expanding!\n");
+			realloc_fat();
 		}
 		fat[last_block] = new_block;
 		last_block = new_block;
 	}
 
-	fat[last_block] = -1;
+	fat[last_block] = FAT_NULL;
 
 	sb_data.s.free_blocks -= num_blocks;
 
@@ -229,10 +275,10 @@ static void free_blocks(fat_ptr start)
 	int num_freed = 0;
 
 	// trying to free a block that doesn't exist
-	if (start < 0) return;
+	if (start == FAT_NULL) return;
 
 	fat_ptr last = start;
-	while (fat[last] >= 0) {
+	while (fat[last] != FAT_NULL) {
 		free_block(last);
 		last = fat[last];
 		num_freed++;
@@ -282,10 +328,9 @@ static const char *get_name(const char *path)
 static int find_in_dir(const char *name, int name_len,
                        fat_ptr *dir_id, dir_block *dir_data)
 {
-
 	if (name_len < 0) name_len = strlen(name);
 
-	for(; *dir_id != -1; *dir_id = fat[*dir_id]) {
+	for(; *dir_id != FAT_NULL; *dir_id = fat[*dir_id]) {
 		read_block_fs(*dir_id, dir_data);
 		int i;
 		for(i = 0; i < dir_data->d.count; i++) {
@@ -299,7 +344,7 @@ static int find_in_dir(const char *name, int name_len,
 	return -1;
 }
 
-// returns pointer to parent dir or negative errno
+// returns pointer to parent dir or a null pointer for error and sets errno
 // if de_out is NULL, last component of path is not evaluated
 static fat_ptr resolve_path(const char *path, struct directory_entry *de_out)
 {
@@ -311,7 +356,8 @@ static fat_ptr resolve_path(const char *path, struct directory_entry *de_out)
 
 	if (path[0] != '/') {
 		// require relative paths
-		return -EINVAL;
+		errno = EINVAL;
+		return FAT_NULL;
 	}
 
 	if (strcmp(path, "/") == 0) {
@@ -319,21 +365,25 @@ static fat_ptr resolve_path(const char *path, struct directory_entry *de_out)
 		path = "/.";
 	}
 
-	while (path[0] == '/') {
+	while (path != NULL) {
 		path++;
-		const char* rest_of_path = strchrnul(path, '/');
-		if (de_out == NULL && rest_of_path[0] != '/') return cur_dir_id;
+		const char* rest_of_path = strchr(path, '/');
+		if (de_out == NULL && rest_of_path == NULL) return cur_dir_id;
 
-		int offset = find_in_dir(path, rest_of_path - path,
+		int offset = find_in_dir(path, rest_of_path == NULL? -1: rest_of_path - path,
 		                         &cur_dir_id, &cur_dir);
-		if (offset < 0) return -ENOENT;
+		if (offset < 0) {
+			errno = ENOENT;
+			return FAT_NULL;
+		}
 
 		current_de = &cur_dir.d.files[offset];
 		parent_dir_id = cur_dir_id;
 		cur_dir_id = current_de->start;
 
-		if (!(current_de->mode & S_IFDIR) && rest_of_path[0] == '/') {
-			return -ENOTDIR;
+		if (!(current_de->mode & S_IFDIR) && rest_of_path != NULL) {
+			errno = ENOTDIR;
+			return FAT_NULL;
 		}
 		path = rest_of_path;
 	}
@@ -363,7 +413,7 @@ static void modify_dir_size(fat_ptr dir_start, off_t size_delta)
 
 	// update in parent dir
 	fat_ptr parent_ptr = dir_data.d.files[1].start;
-	for(; parent_ptr != -1; parent_ptr = fat[parent_ptr]) {
+	for(; parent_ptr != FAT_NULL; parent_ptr = fat[parent_ptr]) {
 		read_block_fs(parent_ptr, &subdir_data);
 		int i;
 		for(i = 0; i < subdir_data.d.count; i++) {
@@ -388,7 +438,7 @@ static void modify_dir_size(fat_ptr dir_start, off_t size_delta)
 	fat_ptr dir_ptr;
 	// ignore "." and ".." on first page of dir
 	int first_to_update = 2;
-	for(dir_ptr = dir_start; dir_ptr != -1; dir_ptr = fat[dir_ptr]) {
+	for(dir_ptr = dir_start; dir_ptr != FAT_NULL; dir_ptr = fat[dir_ptr]) {
 		read_block_fs(dir_ptr, &dir_data);
 		int i;
 		for(i = first_to_update; i < dir_data.d.count; i++) {
@@ -410,7 +460,7 @@ static void modify_dir_size(fat_ptr dir_start, off_t size_delta)
 static int make_file(const char *path, mode_t mode, off_t size, fat_ptr start)
 {
 	fat_ptr parent_ptr = resolve_path(path, NULL);
-	if (parent_ptr < 0) return parent_ptr;
+	if (parent_ptr == FAT_NULL) return -errno;
 
 	const char *name = get_name(path);
 	// max MAX_NAME_LEN chars for file name
@@ -422,14 +472,17 @@ static int make_file(const char *path, mode_t mode, off_t size, fat_ptr start)
 	fat_ptr dir_start = parent_ptr;
 
 	// find a block in the dir that has space
-	while (parent.d.count == FILES_PER_DIR && fat[parent_ptr] != -1) {
+	while (parent.d.count == FILES_PER_DIR && fat[parent_ptr] != FAT_NULL) {
 		parent_ptr = fat[parent_ptr];
 		read_block_fs(parent_ptr, &parent);
 	}
 
 	// no space in the directory; add a block
 	if (parent.d.count == FILES_PER_DIR) {
-		fat[parent_ptr] = alloc_blocks(1);
+		// alloc could move fat
+		// so this has to be on separate lines
+		fat_ptr new_block = alloc_blocks(1);
+		fat[parent_ptr] = new_block;
 		write_fat();
 		parent_ptr = fat[parent_ptr];
 		parent.d.count = 0;
@@ -456,7 +509,7 @@ static int fatfs_getattr(const char *path, struct stat *stbuf)
 
 	struct directory_entry de;
 	fat_ptr err = resolve_path(path, &de);
-	if (err < 0) return err;
+	if (err == FAT_NULL) return -errno;
 
 	stbuf->st_mode = de.mode;
 	stbuf->st_size = de.size;
@@ -468,13 +521,13 @@ static int fatfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 {
 	struct directory_entry de;
 	fat_ptr err = resolve_path(path, &de);
-	if (err < 0) return err;
+	if (err == FAT_NULL) return -errno;
 
 	if (!(de.mode & S_IFDIR)) return -ENOTDIR;
 
 	dir_block dir_data;
 	fat_ptr dir_ptr;
-	for(dir_ptr = de.start; dir_ptr != -1; dir_ptr = fat[dir_ptr]) {
+	for(dir_ptr = de.start; dir_ptr != FAT_NULL; dir_ptr = fat[dir_ptr]) {
 		read_block_fs(dir_ptr, &dir_data);
 
 		int i;
@@ -489,7 +542,7 @@ static int fatfs_access(const char* path, int mask)
 {
 	struct directory_entry de;
 	fat_ptr err = resolve_path(path, &de);
-	if (err < 0) return err;
+	if (err == FAT_NULL) return -errno;
 
 	if (mask == F_OK) {
 		return 0;
@@ -503,8 +556,6 @@ static int fatfs_access(const char* path, int mask)
 
 static int fatfs_mkdir(const char* path, mode_t mode)
 {
-	// make sure there's a free block
-	if(sb_data.s.free_list < 0) return -ENOSPC;
 	fat_ptr dir_data = alloc_blocks(1);
 
 	int err = make_file(path, S_IFDIR | mode, BLOCK_SIZE, dir_data);
@@ -512,7 +563,7 @@ static int fatfs_mkdir(const char* path, mode_t mode)
 
 	struct directory_entry de;
 	fat_ptr parent_ptr = resolve_path(path, &de);
-	if (parent_ptr < 0) return parent_ptr;
+	if (parent_ptr == FAT_NULL) return -errno;
 
 	dir_block parent_block;
 	read_block_fs(parent_ptr, &parent_block);
@@ -532,52 +583,47 @@ static void* fatfs_init(struct fuse_conn_info *conn)
 	if (ret != 0) {
 		fprintf(stderr, "Block device did not initialize. Returned %d\n", ret);
 		exit(1);
-	}
+	} 
 
 	ret = read_superblock();
 	if (ret != 0) {
-	    // fs doesn't exist; create it!
+		// fs doesn't exist; create it!
+		
+		// superblock allocation
+		allocate_block();
+		// we have a block allocated, but not FAT for it
+		sb_data.s.free_blocks = -1;
 
-        // superblock allocation
-        allocate_block();
-        sb_data.s.free_list = 1 + BLOCKS(sizeof fat);
-        sb_data.s.free_blocks = NUM_BLOCKS - sb_data.s.free_list;
+		// fat allocation
+		sb_data.s.fat_end = 0;
+		sb_data.s.fat_size = 0;
+		fat = NULL;
+		realloc_fat();
 
-        // fat allocation
-        for(int i = 0; i < BLOCKS(sizeof fat); i++) {
-            sb_data.s.fat_blocks[i] = allocate_block();
-        }
-        memset(fat, -1, sizeof(fat));
+		// init the root dir (with itself as its parent)
+		// this writes to disk a lot of things
+		struct directory_entry root_entry = {
+			.name = "/",
+			.size = BLOCK_SIZE,
+			.mode = S_IFDIR | 0755,
+			.start = alloc_blocks(1),
+		};
+		sb_data.s.root_dir = root_entry.start;
 
-        //init the free list
-        fat_ptr i;
-        for (i = sb_data.s.free_list; i < NUM_BLOCKS - 1; i++) {
-            fat[i] = i+1;
-        }
-        fat[NUM_BLOCKS - 1] = -1;
+		init_dir(&root_entry, &root_entry);
 
-        // init the root dir (with itself as its parent)
-        // this writes to disk a lot of things
-        struct directory_entry root_entry = {
-            .name = "/",
-            .size = BLOCK_SIZE,
-            .mode = S_IFDIR | 0755,
-            .start = alloc_blocks(1),
-        };
-        sb_data.s.root_dir = root_entry.start;
-
-        init_dir(&root_entry, &root_entry);
-
-        write_superblock();
-    } else {
-        read_fat();
-    }
+		write_superblock();
+	} else {
+		fat = calloc(sizeof(fat_ptr), sb_data.s.fat_size);
+		read_fat();
+	}
 	return NULL;
 }
 
 static void fatfs_destroy(void* private_data)
 {
 	free(current_path);
+	free(fat);
 	block_dev_destroy();
 }
 
@@ -596,7 +642,7 @@ static int fatfs_mknod(const char* path, mode_t mode, dev_t rdev)
 		return -EPERM;
 	}
 
-	return make_file(path, mode, 0, -1);
+	return make_file(path, mode, 0, 0);
 }
 
 static int fatfs_create(const char* path, mode_t mode, struct fuse_file_info* fi)
@@ -633,18 +679,21 @@ static int fatfs_truncate(const char* path, off_t size)
 {
 	struct directory_entry de;
 	fat_ptr parent_ptr = resolve_path(path, &de);
-	if (parent_ptr < 0) return parent_ptr;
+	if (parent_ptr == FAT_NULL) return -errno;
 
 	// realloc blocks is needed
 	if (BLOCKS(size) > BLOCKS(de.size)) {
 		printf("%s: %ld blocks, needs %ld (alloc %ld)\n", path, BLOCKS(de.size), BLOCKS(size), BLOCKS(size) - BLOCKS(de.size));
 		int blocks_to_alloc = BLOCKS(size) - BLOCKS(de.size);
-		if (blocks_to_alloc > sb_data.s.free_blocks) return -ENOSPC;
+		//if (blocks_to_alloc > sb_data.s.free_blocks) return -ENOSPC;
 
-		if (de.start < 0) {
+		if (de.start == FAT_NULL) {
 			de.start = alloc_blocks(blocks_to_alloc);
 		} else {
-			fat[last_block(de.start)] = alloc_blocks(blocks_to_alloc);
+			// alloc could move fat
+			// so this has to be on separate lines
+			fat_ptr new_blocks = alloc_blocks(blocks_to_alloc);
+			fat[last_block(de.start)] = new_blocks;
 			write_fat();
 		}
 	} else if (BLOCKS(size) < BLOCKS(de.size)) {
@@ -655,7 +704,7 @@ static int fatfs_truncate(const char* path, off_t size)
 
 		if (blocks_to_keep == 0) {
 			to_free = de.start;
-			de.start = -1;
+			de.start = FAT_NULL;
 		} else {
 			fat_ptr last_block = nth_block(de.start, blocks_to_keep-1);
 			to_free = fat[last_block];
@@ -682,13 +731,13 @@ static int fatfs_read(const char* path, char *buf, size_t size, off_t offset, st
 {
 	struct directory_entry de;
 	fat_ptr perr = resolve_path(path, &de);
-	if (perr < 0) return perr;
+	if (perr == FAT_NULL) return -errno;
 
 	// check for EOF
 	if (offset >= de.size) return 0;
 
 	// check for hitting EOF
-	if (offset + size > de.size) size = de.size - offset;
+	if (offset + (off_t)size > de.size) size = de.size - offset;
 
 	fat_ptr block_ptr = nth_block(de.start, offset / BLOCK_SIZE);
 	fat_block data_block;
@@ -734,16 +783,16 @@ static int fatfs_write(const char* path, const char *buf, size_t size, off_t off
 {
 	struct directory_entry de;
 	fat_ptr perr = resolve_path(path, &de);
-	if (perr < 0) return perr;
+	if (perr == FAT_NULL) return -errno;
 
 	// check if we need to increase the file size
-	if (offset + size > de.size) {
+	if (offset + (off_t)size > de.size) {
 		int err = fatfs_truncate(path, offset+size);
 		if (err < 0) return err;
 
 		// that might have changed the directory entry
 		perr = resolve_path(path, &de);
-		if (perr < 0) return perr;
+		if (perr == FAT_NULL) return -errno;
 	}
 
 	fat_ptr block_ptr = nth_block(de.start, offset / BLOCK_SIZE);
@@ -772,7 +821,7 @@ static int fatfs_write(const char* path, const char *buf, size_t size, off_t off
 
 	// write all full blocks (if any)
 	while((size - so_far) >= BLOCK_SIZE) {
-		write_block_fs(block_ptr, &buf);
+		write_block_fs(block_ptr, buf);
 		buf += BLOCK_SIZE;
 		so_far += BLOCK_SIZE;
 
@@ -792,7 +841,7 @@ static int fatfs_write(const char* path, const char *buf, size_t size, off_t off
 static int fatfs_unlink(const char* path)
 {
 	fat_ptr parent_ptr = resolve_path(path, NULL);
-	if (parent_ptr < 0) return parent_ptr;
+	if (parent_ptr == FAT_NULL) return -errno;
 
 	dir_block parent_data;
 	int offset = find_in_dir(get_name(path), -1, &parent_ptr, &parent_data);
@@ -818,17 +867,17 @@ static int fatfs_unlink(const char* path)
 
 static int fatfs_rmdir(const char* path)
 {
-	// make sure it's not empty
+	// make sure it's empty
 	struct directory_entry de;
 	fat_ptr err = resolve_path(path, &de);
-	if (err < 0) return err;
+	if (err == FAT_NULL) return -errno;
 
 	dir_block dir_data;
 	read_block_fs(de.start, &dir_data);
 	if (dir_data.d.count != 2) return -ENOTEMPTY;
 
 	fat_ptr dir_ptr;
-	for (dir_ptr = fat[de.start]; dir_ptr >= 0; dir_ptr = fat[dir_ptr]) {
+	for (dir_ptr = fat[de.start]; dir_ptr != FAT_NULL; dir_ptr = fat[dir_ptr]) {
 		read_block_fs(dir_ptr, &dir_data);
 		if (dir_data.d.count != 0) return -ENOTEMPTY;
 	}
@@ -838,7 +887,6 @@ static int fatfs_rmdir(const char* path)
 
 static int fatfs_symlink(const char* to, const char* from)
 {
-	if(sb_data.s.free_list < 0) return -ENOSPC;
 	fat_ptr data_block = alloc_blocks(1);
 
 	// TODO: what permissions should it have?
@@ -857,7 +905,7 @@ static int fatfs_readlink(const char* path, char* buf, size_t size)
 {
 	struct directory_entry de;
 	fat_ptr err = resolve_path(path, &de);
-	if (err < 0) return err;
+	if (err == FAT_NULL) return -errno;
 
 	fat_block data;
 	read_block_fs(de.start, &data);
@@ -871,7 +919,7 @@ static int fatfs_readlink(const char* path, char* buf, size_t size)
 static int fatfs_chmod(const char* path, mode_t mode)
 {
 	fat_ptr parent_id = resolve_path(path, NULL);
-	if (parent_id < 0) return parent_id;
+	if (parent_id == FAT_NULL) return -errno;
 
 	dir_block dir_data;
 	int offset = find_in_dir(get_name(path), -1, &parent_id, &dir_data);
@@ -891,7 +939,7 @@ static int fatfs_statfs(const char* path, struct statvfs* stbuf)
 
 	stbuf->f_bsize = BLOCK_SIZE;
 	stbuf->f_frsize = BLOCK_SIZE;
-	stbuf->f_blocks = NUM_BLOCKS;
+	stbuf->f_blocks = sb_data.s.fat_size;
 	stbuf->f_bfree = sb_data.s.free_blocks;
 	stbuf->f_bavail = sb_data.s.free_blocks;
 
@@ -933,6 +981,14 @@ static struct fuse_operations fatfs_oper = {
 
 int main(int argc, char *argv[])
 {
+#ifdef __GLIBC__
+	// this exists on glibc
 	current_path = get_current_dir_name();
+#else
+	// fall back to POSIX
+	// (fails if PATH_MAX not defined)
+	current_path = malloc(PATH_MAX);
+	getcwd(current_path, PATH_MAX);
+#endif
 	return fuse_main(argc, argv, &fatfs_oper, NULL);
 }

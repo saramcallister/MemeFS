@@ -89,6 +89,7 @@ char *getinmemory(char *url)
     if(res != CURLE_OK) {
       fprintf(stderr, "curl_easy_perform() failed: %s\n",
               curl_easy_strerror(res));
+      return NULL;
     }
     else {
       /*

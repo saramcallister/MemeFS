@@ -11,6 +11,8 @@
  */
 
 #include "blocklayer.h"
+#include "jsteg.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -18,6 +20,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <limits.h>
+#include <errno.h>
 
 #define TESTPATH "/home/meow/Documents/MemeFS/"
 
@@ -851,7 +854,6 @@ static int save_state()
 {
   char rbuff[BLOCKSIZE] = {0};
   int *buff;
-  int size;
   buff = (int*)&rbuff;
   buff[0] = next_alloc;
   queue_save(buff+1, &freed_blocks);
@@ -864,11 +866,9 @@ static int load_state()
 {
   char rbuff[BLOCKSIZE] = {0};
   int *buff;
-  int size;
   read_block(-1, (char*)&rbuff);
   buff = (int*)&rbuff;
   next_alloc = buff[0];
-  size = buff[1];
   freed_blocks = new_queue();
   queue_load(buff+1, &freed_blocks);
   return 0;
@@ -877,14 +877,24 @@ static int load_state()
 int block_dev_init(char *cwd)
 {
   int metafile;
+  int ret;
   char name[NAME_MAX];
-
   char temp[PATH_MAX];
   strcpy((char*)&temp, cwd);
   strcat((char*)&temp, "/");
-  memedl_init((char*)&temp);
+  ret = memedl_init((char*)&temp);
+  if (ret < 0)
+  {
+    printf("Initializing memedl didn't work\n");
+    return -1;
+  }
   strcat((char*)&temp, FOLDRNAME);
   path = strdup((char*)&temp);
+  int err = mkdir(path, 0755);
+  if (err < 0 && errno != EEXIST)
+  {
+    printf("Error creating memes directory: %s", strerror(errno));
+  }
 
   int_to_name(-1,(char*)&name);
   metafile = open((char*)&name, O_RDWR|O_CREAT|O_EXCL, FILEMODE);
@@ -907,16 +917,6 @@ int block_dev_destroy()
   free(path);
   return 0;
 }
-static int image_read(const char *path, char *buf)
-{
-  /* stub temp for stenography */
-  return readData(path, buf, BLOCKSIZE);
-}
-static int image_write(const char *path, const char* buf)
-{
-  /* stub temp for stenography */
-  return writeData(path, buf, BLOCKSIZE);
-}
 int read_block(int blockNum, char *buf)
 {
   char filename[NAME_MAX];
@@ -926,7 +926,7 @@ int read_block(int blockNum, char *buf)
     return -1;
   }
   int_to_name(blockNum, (char *) &filename);
-  image_read((char*)&filename,buf);
+  readData(filename, buf, BLOCKSIZE);
   return 0;
 }
 int write_block(int blockNum, const char *buf)
@@ -940,7 +940,7 @@ int write_block(int blockNum, const char *buf)
   int_to_name(blockNum, (char *) &filename);
   remove((char*)&filename);
   new_meme((char*)&filename);
-  image_write((char*)&filename, buf);
+  writeData(filename, (void *)buf, BLOCKSIZE);
   return 0;
 }
 int allocate_block()
@@ -961,7 +961,7 @@ int allocate_block()
   }
   int_to_name(newblock, (char *) &filename);
   new_meme((char*)&filename);
-  image_write((char*)&filename, buffer);
+  writeData(filename, buffer, BLOCKSIZE);
   return newblock;
 }
 static int free_cleanup()
