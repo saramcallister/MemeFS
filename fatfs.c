@@ -642,7 +642,7 @@ static int fatfs_mknod(const char* path, mode_t mode, dev_t rdev)
 		return -EPERM;
 	}
 
-	return make_file(path, mode, 0, 0);
+	return make_file(path, mode, 0, FAT_NULL);
 }
 
 static int fatfs_create(const char* path, mode_t mode, struct fuse_file_info* fi)
