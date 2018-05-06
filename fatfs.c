@@ -272,22 +272,10 @@ static fat_ptr alloc_blocks(int num_blocks)
 // prepend to free_list
 static void free_blocks(fat_ptr start)
 {
-	int num_freed = 0;
-
-	// trying to free a block that doesn't exist
-	if (start == FAT_NULL) return;
-
-	fat_ptr last = start;
-	while (fat[last] != FAT_NULL) {
-		free_block(last);
-		last = fat[last];
-		num_freed++;
+	for (; start != FAT_NULL; start = fat[start]) {
+		free_block(start);
+		sb_data.s.free_blocks++;
 	}
-
-	fat[last] = sb_data.s.free_list;
-	sb_data.s.free_list = start;
-
-	sb_data.s.free_blocks += num_freed;
 
 	write_fat();
 	write_superblock();
@@ -838,7 +826,7 @@ static int fatfs_write(const char* path, const char *buf, size_t size, off_t off
 	return size;
 }
 
-static int fatfs_unlink(const char* path)
+static int delete_de(const char* path)
 {
 	fat_ptr parent_ptr = resolve_path(path, NULL);
 	if (parent_ptr == FAT_NULL) return -errno;
@@ -846,8 +834,6 @@ static int fatfs_unlink(const char* path)
 	dir_block parent_data;
 	int offset = find_in_dir(get_name(path), -1, &parent_ptr, &parent_data);
 	if (offset < 0) return offset;
-
-	free_blocks(parent_data.d.files[offset].start);
 
 	parent_data.d.count--;
 	if (offset != parent_data.d.count) {
@@ -863,6 +849,17 @@ static int fatfs_unlink(const char* path)
 	write_block_fs(parent_ptr, &parent_data);
 
 	return 0;
+}
+
+static int fatfs_unlink(const char* path)
+{
+	struct directory_entry de;
+	fat_ptr err = resolve_path(path, &de);
+	if (err == FAT_NULL) return -errno;
+
+	free_blocks(de.start);
+
+	return delete_de(path);
 }
 
 static int fatfs_rmdir(const char* path)
@@ -952,6 +949,19 @@ static int fatfs_statfs(const char* path, struct statvfs* stbuf)
 	return 0; // TODO: implement
 }
 
+static int fatfs_rename(const char* from, const char* to)
+{
+	// get permissions
+	struct directory_entry de;
+	fat_ptr parent_ptr = resolve_path(from, &de);
+	if (parent_ptr == FAT_NULL) return -errno;
+
+	int err = make_file(to, de.mode, de.size, de.start);
+	if (err < 0) return err;
+
+	return delete_de(from);
+}
+
 static struct fuse_operations fatfs_oper = {
 // part 1
 	.getattr = fatfs_getattr,
@@ -977,6 +987,7 @@ static struct fuse_operations fatfs_oper = {
 	.write    = fatfs_write,
 // extras
 	.chmod    = fatfs_chmod,
+	.rename   = fatfs_rename,
 };
 
 int main(int argc, char *argv[])
