@@ -48,7 +48,7 @@ int queue_push(int data, queue *q)
   {
     next = q->head;
     last = next;
-    while ((next->data > data) && (next != NULL))
+    while ((next != NULL) && (next->data > data))
     {
       last = next;
       next = next->next;

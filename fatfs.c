@@ -501,6 +501,10 @@ static int fatfs_getattr(const char *path, struct stat *stbuf)
 
 	stbuf->st_mode = de.mode;
 	stbuf->st_size = de.size;
+
+	stbuf->st_uid = geteuid();
+	stbuf->st_gid = getegid();
+
 	return 0;
 }
 
